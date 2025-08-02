@@ -1,17 +1,17 @@
 # DSA Project - Question Management System
 
-A comprehensive web application for managing Data Structures and Algorithms questions with user authentication, progress tracking, and leaderboards.
+A web application for managing Data Structures and Algorithms questions with user authentication, progress tracking, and leaderboards.
 
-## 🚀 Features
+## Features
 
-- **Question Management**: Add, edit, delete, and filter questions
-- **User Authentication**: Secure login system with JWT tokens
-- **Progress Tracking**: Track solved questions and user progress
-- **Leaderboards**: Daily, weekly, and all-time rankings
-- **User Profiles**: Manage user information and coding platform usernames
-- **Admin Panel**: Administrative controls for question management
+- Question Management: Add, edit, delete, and filter questions
+- User Authentication: Secure login system with JWT tokens
+- Progress Tracking: Track solved questions and user progress
+- Leaderboards: Daily, weekly, and all-time rankings
+- User Profiles: Manage user information and coding platform usernames
+- Admin Panel: Administrative controls for question management
 
-## 🏗️ Project Structure
+## Project Structure
 
 ```
 dsaproject/
@@ -26,28 +26,28 @@ dsaproject/
 └── README.md         # This file
 ```
 
-## 🛠️ Technology Stack
+## Technology Stack
 
 ### Backend
-- **Node.js** - Runtime environment
-- **Express.js** - Web framework
-- **PostgreSQL** - Database
-- **JWT** - Authentication
-- **bcryptjs** - Password hashing
-- **CORS** - Cross-origin resource sharing
+- Node.js - Runtime environment
+- Express.js - Web framework
+- Supabase - Database and Authentication
+- JWT - Authentication
+- bcryptjs - Password hashing
+- CORS - Cross-origin resource sharing
 
 ### Frontend
-- **React.js** - UI framework
-- **Tailwind CSS** - Styling
-- **JavaScript** - Programming language
+- React.js - UI framework
+- Tailwind CSS - Styling
+- JavaScript - Programming language
 
-## 📋 Prerequisites
+## Prerequisites
 
 - Node.js (v14 or higher)
-- PostgreSQL (v12 or higher)
+- Supabase account (free tier available)
 - npm or yarn package manager
 
-## 🚀 Getting Started
+## Getting Started
 
 ### 1. Clone the repository
 ```bash
@@ -64,12 +64,10 @@ npm install
 
 Create a `.env` file in the backend directory:
 ```env
-# PostgreSQL Database Configuration
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=questions_db
-DB_USER=postgres
-DB_PASSWORD=your_password
+# Supabase Configuration
+SUPABASE_URL=your_supabase_project_url
+SUPABASE_ANON_KEY=your_supabase_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 
 # Server Configuration
 PORT=3001
@@ -78,10 +76,10 @@ PORT=3001
 JWT_SECRET=your_jwt_secret_here
 ```
 
-Start PostgreSQL service and create database:
-```sql
-CREATE DATABASE questions_db;
-```
+To get your Supabase credentials:
+1. Go to https://supabase.com and create a new project
+2. In your project dashboard, go to Settings > API
+3. Copy the Project URL and API Keys
 
 Start the backend server:
 ```bash
@@ -106,49 +104,49 @@ The application will be available at:
 - Frontend: http://localhost:3000
 - Backend API: http://localhost:3001
 
-## 🗄️ Database Schema
+## Database Schema
 
-The application uses PostgreSQL with the following tables:
+The application uses Supabase (PostgreSQL) with the following tables:
 
 ### Users Table
-- `id` - Primary key
-- `username` - Unique username
-- `password` - Hashed password
-- `role` - User role (admin/user)
-- `full_name` - User's full name
-- `leetcode_username` - LeetCode username
-- `geeksforgeeks_username` - GeeksforGeeks username
-- `created_at` - Account creation timestamp
+- id - Primary key
+- username - Unique username
+- password - Hashed password
+- role - User role (admin/user)
+- full_name - User's full name
+- leetcode_username - LeetCode username
+- geeksforgeeks_username - GeeksforGeeks username
+- created_at - Account creation timestamp
 
 ### Questions Table
-- `id` - Primary key
-- `question_name` - Question title
-- `question_link` - URL to the question
-- `type` - Question type (homework/classwork)
-- `difficulty` - Difficulty level (easy/medium/hard)
-- `created_at` - Question creation timestamp
+- id - Primary key
+- question_name - Question title
+- question_link - URL to the question
+- type - Question type (homework/classwork)
+- difficulty - Difficulty level (easy/medium/hard)
+- created_at - Question creation timestamp
 
 ### User Progress Table
-- `id` - Primary key
-- `user_id` - Foreign key to users table
-- `question_id` - Foreign key to questions table
-- `is_solved` - Boolean flag for completion status
-- `solved_at` - Completion timestamp
-- `notes` - Optional user notes
+- id - Primary key
+- user_id - Foreign key to users table
+- question_id - Foreign key to questions table
+- is_solved - Boolean flag for completion status
+- solved_at - Completion timestamp
+- notes - Optional user notes
 
-## 🔐 Default Credentials
+## Default Credentials
 
 The application comes with default user accounts:
 
-**Admin Account:**
-- Username: `admin`
-- Password: `admin123`
+Admin Account:
+- Username: admin
+- Password: admin123
 
-**User Account:**
-- Username: `dhruv`
-- Password: `user123`
+User Account:
+- Username: dhruv
+- Password: user123
 
-## 📚 API Endpoints
+## API Endpoints
 
 ### Authentication
 - `POST /api/auth/login` - User login
@@ -171,24 +169,25 @@ The application comes with default user accounts:
 ### Leaderboard
 - `GET /api/leaderboard` - Get leaderboard data
 
-## 🤝 Contributing
+## Contributing
 
 1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
+2. Create a feature branch (git checkout -b feature/amazing-feature)
+3. Commit your changes (git commit -m 'Add some amazing feature')
+4. Push to the branch (git push origin feature/amazing-feature)
 5. Open a Pull Request
 
-## 📝 License
+## License
 
 This project is licensed under the ISC License.
 
-## 🐛 Troubleshooting
+## Troubleshooting
 
 ### Database Connection Issues
-- Ensure PostgreSQL service is running
-- Check database credentials in `.env` file
-- Verify database exists and user has proper permissions
+- Verify Supabase project is active and not paused
+- Check Supabase credentials in `.env` file
+- Ensure your Supabase project URL and keys are correct
+- Check if your IP is allowed in Supabase project settings
 
 ### Port Conflicts
 - Backend runs on port 3001 by default

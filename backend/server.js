@@ -1,5 +1,5 @@
 const express = require('express');
-const { Pool } = require('pg');
+const { createClient } = require('@supabase/supabase-js');
 const cors = require('cors');
 const path = require('path');
 const bcrypt = require('bcryptjs');
@@ -16,81 +16,29 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// Initialize PostgreSQL connection pool
-const pool = new Pool({
-    host: process.env.DB_HOST,
-    port: process.env.DB_PORT,
-    database: process.env.DB_NAME,
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    max: 20, // Maximum number of clients in the pool
-    idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 2000,
-});
+// Initialize Supabase client
+const supabase = createClient(
+    process.env.SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+);
 
-// Test database connection and create tables
+// Test Supabase connection
 async function initializeDatabase() {
     try {
-        const client = await pool.connect();
-        console.log('Connected to PostgreSQL database');
+        // Test connection by querying the questions table
+        const { data, error } = await supabase
+            .from('questions')
+            .select('count', { count: 'exact', head: true });
         
-        // Create questions table if it doesn't exist
-        await client.query(`
-            CREATE TABLE IF NOT EXISTS questions (
-                id SERIAL PRIMARY KEY,
-                question_name VARCHAR(255) NOT NULL,
-                question_link TEXT NOT NULL,
-                type VARCHAR(50) NOT NULL CHECK(type IN ('homework', 'classwork')),
-                difficulty VARCHAR(50) NOT NULL CHECK(difficulty IN ('easy', 'medium', 'hard')),
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        `);
+        if (error) {
+            console.log('Note: Tables may not exist yet, that\'s okay');
+        }
         
-        // Create users table
-        await client.query(`
-            CREATE TABLE IF NOT EXISTS users (
-                id SERIAL PRIMARY KEY,
-                username VARCHAR(50) UNIQUE NOT NULL,
-                password VARCHAR(255) NOT NULL,
-                role VARCHAR(20) DEFAULT 'user' CHECK(role IN ('admin', 'user')),
-                full_name VARCHAR(100),
-                leetcode_username VARCHAR(50),
-                geeksforgeeks_username VARCHAR(50),
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        `);
-        
-        // Create user_progress table for tracking solved questions
-        await client.query(`
-            CREATE TABLE IF NOT EXISTS user_progress (
-                id SERIAL PRIMARY KEY,
-                user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-                question_id INTEGER REFERENCES questions(id) ON DELETE CASCADE,
-                is_solved BOOLEAN DEFAULT FALSE,
-                solved_at TIMESTAMP,
-                notes TEXT,
-                UNIQUE(user_id, question_id)
-            )
-        `);
-        
-        // Insert default admin user (password: admin123)
-        await client.query(`
-            INSERT INTO users (username, password, role, full_name) 
-            VALUES ('admin', '$2b$10$oLp/yMtigFHcJihcutF37udFOal.4SJ/T75woElqRc8kYCrc7QJge', 'admin', 'Admin User')
-            ON CONFLICT (username) DO NOTHING
-        `);
-        
-        // Insert default user (password: user123)
-        await client.query(`
-            INSERT INTO users (username, password, role, full_name, leetcode_username, geeksforgeeks_username) 
-            VALUES ('dhruv', '$2b$10$4Qd.L1YqOQiAYylkfXvhnOIqcXOgwK7hsAco5/9tAB9Vj3R1Ivuwa', 'user', 'Dhruv Narang', 'dhruv608', 'dhruv608')
-            ON CONFLICT (username) DO NOTHING
-        `);
-        
-        console.log('Database tables ready');
-        client.release();
+        console.log(' Connected to Supabase successfully!');
+        console.log(' You can now create tables in your Supabase dashboard.');
     } catch (err) {
-        console.error('Database initialization error:', err.message);
+        console.error(' Supabase connection error:', err.message);
+        console.log('Please check your SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in .env file');
         process.exit(1);
     }
 }
@@ -128,13 +76,27 @@ app.post('/submit-question', async (req, res) => {
     }
     
     try {
-        // Insert into database
-        const sql = `INSERT INTO questions (question_name, question_link, type, difficulty) 
-                     VALUES ($1, $2, $3, $4) RETURNING id`;
+        // Insert into database using Supabase
+        const { data, error } = await supabase
+            .from('questions')
+            .insert([
+                {
+                    question_name: questionName,
+                    question_link: questionLink,
+                    type: type,
+                    difficulty: difficulty
+                }
+            ])
+            .select();
         
-        const result = await pool.query(sql, [questionName, questionLink, type, difficulty]);
-        const newId = result.rows[0].id;
+        if (error) {
+            console.error('Database error:', error.message);
+            return res.status(500).json({ 
+                error: 'Failed to save question to database' 
+            });
+        }
         
+        const newId = data[0].id;
         console.log(`New question added with ID: ${newId}`);
         res.json({ 
             success: true, 
@@ -152,9 +114,19 @@ app.post('/submit-question', async (req, res) => {
 // Get all questions endpoint (for viewing stored data)
 app.get('/questions', async (req, res) => {
     try {
-        const sql = `SELECT * FROM questions ORDER BY created_at DESC`;
-        const result = await pool.query(sql);
-        res.json(result.rows);
+        const { data, error } = await supabase
+            .from('questions')
+            .select('*')
+            .order('created_at', { ascending: false });
+        
+        if (error) {
+            console.error('Database error:', error.message);
+            return res.status(500).json({ 
+                error: 'Failed to retrieve questions' 
+            });
+        }
+        
+        res.json(data);
     } catch (err) {
         console.error('Database error:', err.message);
         res.status(500).json({ 
@@ -166,27 +138,34 @@ app.get('/questions', async (req, res) => {
 // Get questions by filter
 app.get('/questions/filter', async (req, res) => {
     const { type, difficulty } = req.query;
-    let sql = `SELECT * FROM questions WHERE 1=1`;
-    let params = [];
-    let paramCount = 0;
-    
-    if (type) {
-        paramCount++;
-        sql += ` AND type = $${paramCount}`;
-        params.push(type);
-    }
-    
-    if (difficulty) {
-        paramCount++;
-        sql += ` AND difficulty = $${paramCount}`;
-        params.push(difficulty);
-    }
-    
-    sql += ` ORDER BY created_at DESC`;
     
     try {
-        const result = await pool.query(sql, params);
-        res.json(result.rows);
+        let query = supabase
+            .from('questions')
+            .select('*');
+        
+        // Apply filters if provided
+        if (type) {
+            query = query.eq('type', type);
+        }
+        
+        if (difficulty) {
+            query = query.eq('difficulty', difficulty);
+        }
+        
+        // Order by created_at descending
+        query = query.order('created_at', { ascending: false });
+        
+        const { data, error } = await query;
+        
+        if (error) {
+            console.error('Database error:', error.message);
+            return res.status(500).json({ 
+                error: 'Failed to retrieve questions' 
+            });
+        }
+        
+        res.json(data);
     } catch (err) {
         console.error('Database error:', err.message);
         res.status(500).json({ 
@@ -224,12 +203,25 @@ app.put('/questions/:id', async (req, res) => {
     }
     
     try {
-        const sql = `UPDATE questions 
-                     SET question_name = $1, question_link = $2, type = $3, difficulty = $4 
-                     WHERE id = $5`;
-        const result = await pool.query(sql, [questionName, questionLink, type, difficulty, id]);
+        const { data, error } = await supabase
+            .from('questions')
+            .update({
+                question_name: questionName,
+                question_link: questionLink,
+                type: type,
+                difficulty: difficulty
+            })
+            .eq('id', id)
+            .select();
         
-        if (result.rowCount === 0) {
+        if (error) {
+            console.error('Database error:', error.message);
+            return res.status(500).json({ 
+                error: 'Failed to update question' 
+            });
+        }
+        
+        if (data.length === 0) {
             return res.status(404).json({ 
                 error: 'Question not found' 
             });
@@ -253,10 +245,20 @@ app.delete('/questions/:id', async (req, res) => {
     const { id } = req.params;
     
     try {
-        const sql = `DELETE FROM questions WHERE id = $1`;
-        const result = await pool.query(sql, [id]);
+        const { data, error } = await supabase
+            .from('questions')
+            .delete()
+            .eq('id', id)
+            .select();
         
-        if (result.rowCount === 0) {
+        if (error) {
+            console.error('Database error:', error.message);
+            return res.status(500).json({ 
+                error: 'Failed to delete question' 
+            });
+        }
+        
+        if (data.length === 0) {
             return res.status(404).json({ 
                 error: 'Question not found' 
             });
@@ -282,12 +284,7 @@ app.listen(PORT, () => {
 // Handle graceful shutdown
 process.on('SIGINT', async () => {
     console.log('\nShutting down server...');
-    try {
-        await pool.end();
-        console.log('Database connection pool closed');
-    } catch (err) {
-        console.error('Error closing database pool:', err.message);
-    }
+    console.log('✅ Server shut down gracefully');
     process.exit(0);
 });
 
@@ -300,13 +297,17 @@ app.post('/api/auth/login', async (req, res) => {
     const { username, password } = req.body;
 
     try {
-        const result = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
-        const user = result.rows[0];
-
-        if (!user) {
+        const { data, error } = await supabase
+            .from('users')
+            .select('*')
+            .eq('username', username)
+            .single();
+        
+        if (error || !data) {
             return res.status(401).json({ error: 'Invalid credentials' });
         }
 
+        const user = data;
         const isMatch = await bcrypt.compare(password, user.password);
 
         if (!isMatch) {
@@ -337,8 +338,17 @@ app.get('/api/progress/:userId', async (req, res) => {
     const { userId } = req.params;
 
     try {
-        const result = await pool.query('SELECT question_id, is_solved FROM user_progress WHERE user_id = $1', [userId]);
-        res.json(result.rows);
+        const { data, error } = await supabase
+            .from('user_progress')
+            .select('question_id, is_solved')
+            .eq('user_id', userId);
+        
+        if (error) {
+            console.error('Error fetching user progress:', error.message);
+            return res.status(500).json({ error: 'Failed to fetch progress' });
+        }
+        
+        res.json(data);
     } catch (err) {
         console.error('Error fetching user progress:', err.message);
         res.status(500).json({ error: 'Failed to fetch progress' });
@@ -358,8 +368,17 @@ app.get('/user-progress', async (req, res) => {
         const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your_default_secret');
         const userId = decoded.userId;
 
-        const result = await pool.query('SELECT question_id, is_solved FROM user_progress WHERE user_id = $1', [userId]);
-        res.json(result.rows);
+        const { data, error } = await supabase
+            .from('user_progress')
+            .select('question_id, is_solved')
+            .eq('user_id', userId);
+        
+        if (error) {
+            console.error('Error fetching user progress:', error.message);
+            return res.status(500).json({ error: 'Failed to fetch progress' });
+        }
+        
+        res.json(data);
     } catch (err) {
         console.error('Error fetching user progress:', err.message);
         res.status(500).json({ error: 'Failed to fetch progress' });
@@ -371,15 +390,25 @@ app.post('/api/progress', async (req, res) => {
     const { userId, questionId, isSolved } = req.body;
 
     try {
-        const now = new Date();
-        const sql = `
-            INSERT INTO user_progress (user_id, question_id, is_solved, solved_at)
-            VALUES ($1, $2, $3, $4)
-            ON CONFLICT (user_id, question_id)
-            DO UPDATE SET is_solved = $3, solved_at = $4;
-        `;
-
-        await pool.query(sql, [userId, questionId, isSolved, now]);
+        const now = new Date().toISOString();
+        
+        const { data, error } = await supabase
+            .from('user_progress')
+            .upsert({
+                user_id: userId,
+                question_id: questionId,
+                is_solved: isSolved,
+                solved_at: now
+            }, {
+                onConflict: 'user_id,question_id'
+            })
+            .select();
+        
+        if (error) {
+            console.error('Error updating user progress:', error.message);
+            return res.status(500).json({ error: 'Failed to update progress' });
+        }
+        
         res.json({ success: true, message: 'Progress updated' });
 
     } catch (err) {
@@ -397,16 +426,17 @@ app.get('/api/users/:id', async (req, res) => {
     const { id } = req.params;
 
     try {
-        const result = await pool.query(
-            'SELECT id, username, full_name, leetcode_username, geeksforgeeks_username, created_at FROM users WHERE id = $1',
-            [id]
-        );
+        const { data, error } = await supabase
+            .from('users')
+            .select('id, username, full_name, leetcode_username, geeksforgeeks_username, created_at')
+            .eq('id', id)
+            .single();
         
-        if (result.rows.length === 0) {
+        if (error || !data) {
             return res.status(404).json({ error: 'User not found' });
         }
 
-        res.json(result.rows[0]);
+        res.json(data);
     } catch (err) {
         console.error('Error fetching user profile:', err.message);
         res.status(500).json({ error: 'Failed to fetch user profile' });
@@ -419,15 +449,22 @@ app.put('/api/users/:id', async (req, res) => {
     const { fullName, leetcodeUsername, geeksforgeeksUsername } = req.body;
 
     try {
-        const sql = `
-            UPDATE users 
-            SET full_name = $1, leetcode_username = $2, geeksforgeeks_username = $3
-            WHERE id = $4
-        `;
+        const { data, error } = await supabase
+            .from('users')
+            .update({
+                full_name: fullName,
+                leetcode_username: leetcodeUsername,
+                geeksforgeeks_username: geeksforgeeksUsername
+            })
+            .eq('id', id)
+            .select();
         
-        const result = await pool.query(sql, [fullName, leetcodeUsername, geeksforgeeksUsername, id]);
+        if (error) {
+            console.error('Error updating user profile:', error.message);
+            return res.status(500).json({ error: 'Failed to update user profile' });
+        }
         
-        if (result.rowCount === 0) {
+        if (data.length === 0) {
             return res.status(404).json({ error: 'User not found' });
         }
 
@@ -442,51 +479,87 @@ app.put('/api/users/:id', async (req, res) => {
 //                        LEADERBOARD ROUTES                        
 // *******************************************************************
 
-// Get leaderboard data
+// Get leaderboard data using Supabase
 app.get('/api/leaderboard', async (req, res) => {
     const { period } = req.query; // daily, weekly, all-time
 
     try {
-        let sql = `
-            SELECT 
-                u.id,
-                u.username,
-                u.full_name,
-                COUNT(up.question_id) as solved_count,
-                ROUND(
-                    (COUNT(up.question_id)::float / 
-                     NULLIF((SELECT COUNT(*) FROM questions), 0) * 100), 2
-                ) as success_rate
-            FROM users u
-            LEFT JOIN user_progress up ON u.id = up.user_id AND up.is_solved = true
-        `;
+        // Get all users with role 'user'
+        const { data: users, error: usersError } = await supabase
+            .from('users')
+            .select('id, username, full_name')
+            .eq('role', 'user');
 
-        let params = [];
-        
-        // Add time-based filtering
-        if (period === 'daily') {
-            sql += ` AND up.solved_at >= CURRENT_DATE`;
-        } else if (period === 'weekly') {
-            sql += ` AND up.solved_at >= CURRENT_DATE - INTERVAL '7 days'`;
+        if (usersError) {
+            console.error('Error fetching users:', usersError.message);
+            return res.status(500).json({ error: 'Failed to fetch leaderboard' });
         }
-        // For 'all-time' or no period, no additional filter needed
 
-        sql += `
-            WHERE u.role = 'user'
-            GROUP BY u.id, u.username, u.full_name
-            ORDER BY solved_count DESC, u.username ASC
-            LIMIT 50
-        `;
+        // Get total questions count
+        const { count: totalQuestions, error: questionsError } = await supabase
+            .from('questions')
+            .select('*', { count: 'exact', head: true });
 
-        const result = await pool.query(sql, params);
-        
-        // Add rank to each user
-        const leaderboard = result.rows.map((user, index) => ({
-            ...user,
-            rank: index + 1
-        }));
+        if (questionsError) {
+            console.error('Error fetching questions count:', questionsError.message);
+            return res.status(500).json({ error: 'Failed to fetch leaderboard' });
+        }
 
-        res.json(leaderboard);
+        // Build leaderboard data
+        const leaderboard = [];
+
+        for (const user of users) {
+            let progressQuery = supabase
+                .from('user_progress')
+                .select('*', { count: 'exact', head: true })
+                .eq('user_id', user.id)
+                .eq('is_solved', true);
+
+            // Apply time filtering if specified
+            if (period === 'daily') {
+                const today = new Date().toISOString().slice(0, 10);
+                progressQuery = progressQuery.gte('solved_at', today);
+            } else if (period === 'weekly') {
+                const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+                progressQuery = progressQuery.gte('solved_at', weekAgo);
+            }
+
+            const { count: solvedCount, error: progressError } = await progressQuery;
+
+            if (progressError) {
+                console.error('Error fetching user progress:', progressError.message);
+                continue; // Skip this user but continue with others
+            }
+
+            const successRate = totalQuestions > 0 ? 
+                Math.round((solvedCount / totalQuestions) * 100 * 100) / 100 : 0;
+
+            leaderboard.push({
+                id: user.id,
+                username: user.username,
+                full_name: user.full_name,
+                solved_count: solvedCount || 0,
+                success_rate: successRate
+            });
+        }
+
+        // Sort by solved_count descending, then by username ascending
+        leaderboard.sort((a, b) => {
+            if (b.solved_count !== a.solved_count) {
+                return b.solved_count - a.solved_count;
+            }
+            return a.username.localeCompare(b.username);
+        });
+
+        // Add rank and limit to 50
+        const rankedLeaderboard = leaderboard
+            .slice(0, 50)
+            .map((user, index) => ({
+                ...user,
+                rank: index + 1
+            }));
+
+        res.json(rankedLeaderboard);
     } catch (err) {
         console.error('Error fetching leaderboard:', err.message);
         res.status(500).json({ error: 'Failed to fetch leaderboard' });

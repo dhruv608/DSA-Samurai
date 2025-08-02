@@ -1,17 +1,14 @@
-import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   TrophyIcon, 
   ExclamationTriangleIcon, 
   ArrowPathIcon,
-  UserIcon,
+  FireIcon,
   CheckCircleIcon,
-  ChartBarIcon,
-  FireIcon
+  ChartBarIcon
 } from '@heroicons/react/24/outline';
 import { 
   TrophyIcon as TrophyIconSolid,
-  StarIcon as StarIconSolid 
 } from '@heroicons/react/24/solid';
 
 const LeaderboardPage = () => {
@@ -21,12 +18,12 @@ const LeaderboardPage = () => {
   const [filter, setFilter] = useState('all-time');
 
   // Enhanced static demo data with more details
-  const staticLeaderboardData = {
+  const staticLeaderboardData = useMemo(() => ({
     'all-time': [
       { 
         id: 1, 
-        username: 'rahul', 
-        full_name: 'rahul sharma', 
+        username: 'nitin', 
+        full_name: 'Nitin Verma', 
         solved_count: 45, 
         success_rate: 78.2, 
         rank: 1,
@@ -38,8 +35,8 @@ const LeaderboardPage = () => {
       },
       { 
         id: 2, 
-        username: 'alice_codes', 
-        full_name: 'Alice Johnson', 
+        username: 'shivani', 
+        full_name: 'Shivani Kapoor', 
         solved_count: 42, 
         success_rate: 75.5, 
         rank: 2,
@@ -51,8 +48,8 @@ const LeaderboardPage = () => {
       },
       { 
         id: 3, 
-        username: 'bob_dev', 
-        full_name: 'Bob Smith', 
+        username: 'shivam', 
+        full_name: 'Shivam Tiwari', 
         solved_count: 38, 
         success_rate: 72.1, 
         rank: 3,
@@ -62,28 +59,28 @@ const LeaderboardPage = () => {
         medium: 15,
         hard: 8
       },
-      { id: 4, username: 'charlie_prog', full_name: 'Charlie Brown', solved_count: 35, success_rate: 68.9, rank: 4 },
-      { id: 5, username: 'diana_code', full_name: 'Diana Prince', solved_count: 32, success_rate: 65.3, rank: 5 },
-      { id: 6, username: 'eve_script', full_name: 'Eve Davis', solved_count: 28, success_rate: 61.7, rank: 6 },
-      { id: 7, username: 'frank_algo', full_name: 'Frank Wilson', solved_count: 25, success_rate: 58.4, rank: 7 },
-      { id: 8, username: 'grace_loop', full_name: 'Grace Miller', solved_count: 22, success_rate: 55.2, rank: 8 },
-      { id: 9, username: 'henry_func', full_name: 'Henry Taylor', solved_count: 19, success_rate: 52.1, rank: 9 },
-      { id: 10, username: 'ivy_binary', full_name: 'Ivy Anderson', solved_count: 16, success_rate: 48.9, rank: 10 }
+      { id: 4, username: 'kajal', full_name: 'Kajal Deshmukh', solved_count: 35, success_rate: 68.9, rank: 4 },
+      { id: 5, username: 'neha', full_name: 'Neha Agarwal', solved_count: 32, success_rate: 65.3, rank: 5 },
+      { id: 6, username: 'muskan', full_name: 'Muskan Mehra', solved_count: 28, success_rate: 61.7, rank: 6 },
+      { id: 7, username: 'ankit', full_name: 'Ankit Bhatt', solved_count: 25, success_rate: 58.4, rank: 7 },
+      { id: 8, username: 'priya', full_name: 'Priya Joshi', solved_count: 22, success_rate: 55.2, rank: 8 },
+      { id: 9, username: 'rohit', full_name: 'Rohit Singh', solved_count: 19, success_rate: 52.1, rank: 9 },
+      { id: 10, username: 'sneha', full_name: 'Sneha Bansal', solved_count: 16, success_rate: 48.9, rank: 10 }
     ],
     'weekly': [
       { id: 1, username: 'dhruv', full_name: 'Dhruv Patel', solved_count: 12, success_rate: 85.7, rank: 1, streak: 5 },
-      { id: 2, username: 'alice_codes', full_name: 'Alice Johnson', solved_count: 10, success_rate: 83.3, rank: 2, streak: 4 },
-      { id: 3, username: 'bob_dev', full_name: 'Bob Smith', solved_count: 8, success_rate: 80.0, rank: 3, streak: 3 },
-      { id: 4, username: 'charlie_prog', full_name: 'Charlie Brown', solved_count: 7, success_rate: 77.8, rank: 4 },
-      { id: 5, username: 'diana_code', full_name: 'Diana Prince', solved_count: 6, success_rate: 75.0, rank: 5 }
+      { id: 2, username: 'shivani', full_name: 'Shivani Kapoor', solved_count: 10, success_rate: 83.3, rank: 2, streak: 4 },
+      { id: 3, username: 'shivam', full_name: 'Shivam Tiwari', solved_count: 8, success_rate: 80.0, rank: 3, streak: 3 },
+      { id: 4, username: 'kajal', full_name: 'Kajal Deshmukh', solved_count: 7, success_rate: 77.8, rank: 4 },
+      { id: 5, username: 'neha', full_name: 'Neha Agarwal', solved_count: 6, success_rate: 75.0, rank: 5 }
     ],
     'daily': [
       { id: 1, username: 'dhruv', full_name: 'Dhruv Patel', solved_count: 3, success_rate: 100.0, rank: 1, streak: 1 },
-      { id: 2, username: 'alice_codes', full_name: 'Alice Johnson', solved_count: 2, success_rate: 100.0, rank: 2, streak: 1 },
-      { id: 3, username: 'bob_dev', full_name: 'Bob Smith', solved_count: 2, success_rate: 100.0, rank: 3, streak: 1 },
-      { id: 4, username: 'charlie_prog', full_name: 'Charlie Brown', solved_count: 1, success_rate: 100.0, rank: 4 }
+      { id: 2, username: 'shivani', full_name: 'Shivani Kapoor', solved_count: 2, success_rate: 100.0, rank: 2, streak: 1 },
+      { id: 3, username: 'shivam', full_name: 'Shivam Tiwari', solved_count: 2, success_rate: 100.0, rank: 3, streak: 1 },
+      { id: 4, username: 'kajal', full_name: 'Kajal Deshmukh', solved_count: 1, success_rate: 100.0, rank: 4 }
     ]
-  };
+  }), []);
 
   useEffect(() => {
     const fetchLeaderboard = async () => {
@@ -99,7 +96,7 @@ const LeaderboardPage = () => {
     };
 
     fetchLeaderboard();
-  }, [filter]);
+  }, [filter, staticLeaderboardData]);
 
   const getAvatarInitials = (name) => {
     return name.split(' ').map(n => n[0]).join('').toUpperCase();
@@ -114,14 +111,6 @@ const LeaderboardPage = () => {
     return colors[rank] || 'bg-gradient-to-br from-blue-400 to-blue-600';
   };
 
-  const getPodiumHeight = (rank) => {
-    const heights = {
-      1: 'h-32',
-      2: 'h-24',
-      3: 'h-20'
-    };
-    return heights[rank] || 'h-16';
-  };
 
   if (loading) {
     return (

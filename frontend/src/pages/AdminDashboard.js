@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { 
   WrenchScrewdriverIcon,
@@ -15,8 +15,6 @@ import {
   InboxIcon,
   ArrowsUpDownIcon,
   FunnelIcon,
-  CheckCircleIcon,
-  XCircleIcon
 } from '@heroicons/react/24/outline';
 
 const API_BASE_URL = 'http://localhost:3001';
@@ -42,7 +40,7 @@ const AdminDashboard = () => {
   });
 
   // Fetch all questions
-  const fetchQuestions = async () => {
+  const fetchQuestions = useCallback(async () => {
     try {
       setLoading(true);
       const response = await axios.get(`${API_BASE_URL}/questions`);
@@ -54,7 +52,7 @@ const AdminDashboard = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   // Show message to user
   const showMessage = (msg, type) => {
@@ -137,7 +135,7 @@ const AdminDashboard = () => {
   // Load questions on component mount
   useEffect(() => {
     fetchQuestions();
-  }, []);
+  }, [fetchQuestions]);
 
   // Get statistics
   const getStats = () => {

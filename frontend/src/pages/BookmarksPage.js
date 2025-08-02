@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useCallback } from 'react';
 import axios from 'axios';
 import { BookmarkIcon, ClipboardDocumentListIcon, ChartBarIcon } from '@heroicons/react/24/outline';
 import QuestionCard from '../components/QuestionCard';
@@ -13,19 +13,20 @@ const BookmarksPage = () => {
   const [userProgress, setUserProgress] = useState({});
   const [loading, setLoading] = useState(true);
 
-  // Get bookmarked questions from local storage or state
-  const getBookmarkedQuestions = () => {
-    const saved = localStorage.getItem(`bookmarks_${user?.id}`);
-    return saved ? JSON.parse(saved) : {};
-  };
 
   // Save bookmarks to local storage
   const saveBookmarks = (bookmarks) => {
     localStorage.setItem(`bookmarks_${user?.id}`, JSON.stringify(bookmarks));
   };
 
+  // Get bookmarked questions from local storage or state
+  const getBookmarkedQuestions = useCallback(() => {
+    const saved = localStorage.getItem(`bookmarks_${user?.id}`);
+    return saved ? JSON.parse(saved) : {};
+  }, [user?.id]);
+
   // Fetch all questions
-  const fetchQuestions = async () => {
+  const fetchQuestions = useCallback(async () => {
     try {
       setLoading(true);
       const response = await axios.get(`${API_BASE_URL}/questions`);
@@ -39,10 +40,10 @@ const BookmarksPage = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [getBookmarkedQuestions]);
 
   // Fetch user progress
-  const fetchUserProgress = async () => {
+  const fetchUserProgress = useCallback(async () => {
     if (!user || !token) return;
     try {
       const response = await axios.get(`${API_BASE_URL}/api/progress/${user.id}`, {
@@ -56,7 +57,7 @@ const BookmarksPage = () => {
     } catch (error) {
       console.error('Error fetching user progress:', error);
     }
-  };
+  }, [user, token]);
 
   // Toggle solved status
   const toggleSolved = async (questionId) => {
@@ -102,7 +103,7 @@ const BookmarksPage = () => {
       await fetchUserProgress();
     };
     fetchAllData();
-  }, [user, token]);
+  }, [user, token, fetchQuestions, fetchUserProgress]);
 
   // Filter only bookmarked questions
   const bookmarkedQuestionsList = questions.filter(question => 

@@ -1,12 +1,10 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useCallback } from 'react';
 import axios from 'axios';
 import { 
   MagnifyingGlassIcon, 
   RocketLaunchIcon,
   Square3Stack3DIcon,
   LinkIcon,
-  BookOpenIcon,
-  ArrowPathIcon,
   BoltIcon
 } from '@heroicons/react/24/outline';
 import { 
@@ -35,8 +33,15 @@ const UserHomePage = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [bookmarkedQuestions, setBookmarkedQuestions] = useState({});
 
+  // Get bookmarked questions from local storage
+  const getBookmarkedQuestions = useCallback(() => {
+    if (!user?.id) return {};
+    const saved = localStorage.getItem(`bookmarks_${user.id}`);
+    return saved ? JSON.parse(saved) : {};
+  }, [user?.id]);
+
   // Fetch all questions
-  const fetchQuestions = async () => {
+  const fetchQuestions = useCallback(async () => {
     try {
       setLoading(true);
       const response = await axios.get(`${API_BASE_URL}/questions`);
@@ -47,10 +52,10 @@ const UserHomePage = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   // Fetch user progress
-  const fetchUserProgress = async () => {
+  const fetchUserProgress = useCallback(async () => {
     if (!user || !token) return;
     try {
       const response = await axios.get(`${API_BASE_URL}/api/progress/${user.id}`, {
@@ -64,7 +69,7 @@ const UserHomePage = () => {
     } catch (error) {
       console.error('Error fetching user progress:', error);
     }
-  };
+  }, [user, token]);
 
   // Toggle solved status
   const toggleSolved = async (questionId) => {
@@ -95,7 +100,7 @@ const UserHomePage = () => {
   };
 
   // Get date filter options
-  const getDateFilteredQuestions = (questions) => {
+  const getDateFilteredQuestions = useCallback((questions) => {
     if (dateFilter === 'all') return questions;
 
     const now = new Date();
@@ -119,7 +124,7 @@ const UserHomePage = () => {
       const questionDate = new Date(question.created_at);
       return questionDate >= filterDate;
     });
-  };
+  }, [dateFilter]);
 
   // Filter and sort questions based on search and filters
   useEffect(() => {
@@ -152,14 +157,13 @@ const UserHomePage = () => {
     });
     
     setFilteredQuestions(filtered);
-  }, [questions, searchTerm, activeFilter, difficultyFilter, solvedFilter, dateFilter, sortFilter, userProgress]);
+  }, [questions, searchTerm, activeFilter, difficultyFilter, solvedFilter, dateFilter, sortFilter, userProgress, getDateFilteredQuestions]);
 
   // Load questions and progress on component mount
   useEffect(() => {
     const fetchAllData = async () => {
       await fetchQuestions();
       await fetchUserProgress();
-
       // Load bookmarks from localStorage
       if (user?.id) {
         const savedBookmarks = getBookmarkedQuestions();
@@ -167,7 +171,7 @@ const UserHomePage = () => {
       }
     };
     fetchAllData();
-  }, [user, token]);
+  }, [user, token, fetchQuestions, fetchUserProgress, getBookmarkedQuestions]);
 
   // Get statistics
   const getStats = () => {
@@ -183,13 +187,6 @@ const UserHomePage = () => {
 
   const stats = getStats();
   const itemsPerPage = 10;
-
-  // Get bookmarked questions from local storage
-  const getBookmarkedQuestions = () => {
-    if (!user?.id) return {};
-    const saved = localStorage.getItem(`bookmarks_${user.id}`);
-    return saved ? JSON.parse(saved) : {};
-  };
 
   // Save bookmarks to local storage
   const saveBookmarks = (bookmarks) => {
@@ -426,7 +423,7 @@ const UserHomePage = () => {
       <footer className="user-footer">
         <div className="footer-content">
           <p className="flex items-center justify-center">
-            &copy; 2025 Coding Questions Hub. Keep practicing and keep growing! 
+            &copy; 2025 DSA Samurai. Keep practicing and keep growing! 
             <RocketLaunchIcon className="inline-block w-5 h-5 ml-1" />
           </p>
         </div>

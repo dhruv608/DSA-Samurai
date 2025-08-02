@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { ClipboardDocumentListIcon } from '@heroicons/react/24/outline';
 import QuestionList from '../components/QuestionList';
@@ -19,7 +19,7 @@ const QuestionsPage = () => {
   const [filterDifficulty, setFilterDifficulty] = useState('easy');
 
   // Fetch all questions
-  const fetchQuestions = async () => {
+  const fetchQuestions = useCallback(async () => {
     try {
       setLoading(true);
       const response = await axios.get(`${API_BASE_URL}/questions`);
@@ -31,7 +31,7 @@ const QuestionsPage = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   // Show message to user
   const showMessage = (msg, type) => {
@@ -86,7 +86,7 @@ const QuestionsPage = () => {
   // Load questions on component mount
   useEffect(() => {
     fetchQuestions();
-  }, []);
+  }, [fetchQuestions]);
 
   // Get statistics
   const getStats = () => {

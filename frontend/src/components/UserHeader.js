@@ -5,7 +5,7 @@ import { AuthContext } from '../context/AuthContext';
 
 const UserHeader = () => {
   const location = useLocation();
-  const { user, logout } = useContext(AuthContext);
+  const { user } = useContext(AuthContext);
 
   return (
     <header className="header user-header">

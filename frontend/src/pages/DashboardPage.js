@@ -34,13 +34,6 @@ const DashboardPage = () => {
   const [questions, setQuestions] = useState([]);
   const [userProgress, setUserProgress] = useState({});
   const [loading, setLoading] = useState(true);
-  const [filters, setFilters] = useState({
-    difficulty: 'All',
-    type: 'All',
-    date: '',
-    solved: 'All'
-  });
-  const [filteredQuestions, setFilteredQuestions] = useState([]);
 
   // Fetch questions and user progress
   useEffect(() => {
@@ -73,76 +66,9 @@ const DashboardPage = () => {
     }
   }, [user]);
 
-  // Filter questions based on all filters
-  useEffect(() => {
-    let filtered = questions;
-    
-    // Filter by difficulty
-    if (filters.difficulty !== 'All') {
-      filtered = filtered.filter(q => q.difficulty === filters.difficulty.toLowerCase());
-    }
 
-    // Filter by type
-    if (filters.type !== 'All') {
-      filtered = filtered.filter(q => q.type === filters.type.toLowerCase());
-    }
-    
-    // Filter by date
-    if (filters.date) {
-      const filterDate = new Date(filters.date);
-      filtered = filtered.filter(q => {
-        const questionDate = new Date(q.created_at);
-        return questionDate.toDateString() === filterDate.toDateString();
-      });
-    }
 
-    // Filter by solved status
-    if (filters.solved !== 'All') {
-      filtered = filtered.filter(q => {
-        const isSolved = userProgress[q.id] || false;
-        return filters.solved === 'Solved' ? isSolved : !isSolved;
-      });
-    }
-    
-    setFilteredQuestions(filtered);
-  }, [questions, filters, userProgress]);
 
-  // Handle filter changes
-  const handleFilterChange = (e) => {
-    const { name, value } = e.target;
-    setFilters(prev => ({ ...prev, [name]: value }));
-  };
-
-  // Clear all filters
-  const clearAllFilters = () => {
-    setFilters({
-      difficulty: 'All',
-      type: 'All',
-      date: '',
-      solved: 'All'
-    });
-  };
-
-  // Toggle question solved status
-  const toggleSolved = async (questionId) => {
-    const currentStatus = userProgress[questionId] || false;
-    const newStatus = !currentStatus;
-
-    try {
-      await axios.post('http://localhost:3001/api/progress', {
-        userId: user.id,
-        questionId: questionId,
-        isSolved: newStatus
-      });
-
-      setUserProgress(prev => ({
-        ...prev,
-        [questionId]: newStatus
-      }));
-    } catch (error) {
-      console.error('Error updating progress:', error);
-    }
-  };
 
   // Calculate stats
   const getStats = () => {

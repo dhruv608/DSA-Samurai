@@ -107,7 +107,7 @@ const QuestionsPage = () => {
       <div className="questions-header">
         <h1>
           <ClipboardDocumentListIcon className="inline-block w-8 h-8 mr-2" />
-          All Questions
+           All Questions
         </h1>
         <p className="page-description">
           Use filters to manage and browse the collection of coding questions

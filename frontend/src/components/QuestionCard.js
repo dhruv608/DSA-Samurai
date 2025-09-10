@@ -85,7 +85,7 @@ const QuestionCard = ({ question, isSolved, onToggleSolved, isBookmarked, onTogg
             <div className={`px-4 py-2 text-sm rounded flex items-center ${
               isSolved 
                 ? 'bg-green-100 text-green-800 border border-green-300'
-                : 'bg-gray-100 text-gray-600 border border-gray-300'
+                : 'bg-red-100 text-gray-600 border border-gray-300'
             }`}>
               {isSolved ? (
                 <>
@@ -94,8 +94,8 @@ const QuestionCard = ({ question, isSolved, onToggleSolved, isBookmarked, onTogg
                 </>
               ) : (
                 <>
-                  <CheckIcon className="inline-block w-4 h-4 mr-1" />
-                  Auto-Sync
+                  {/* <CheckIcon className="inline-block w-4 h-4 mr-1" /> */}
+                  Not Solved
                 </>
               )}
             </div>
@@ -117,7 +117,7 @@ const QuestionCard = ({ question, isSolved, onToggleSolved, isBookmarked, onTogg
               ) : (
                 <>
                   <CheckIcon className="inline-block w-4 h-4 mr-1" />
-                  Mark Solved
+                   Solved
                 </>
               )}
             </button>

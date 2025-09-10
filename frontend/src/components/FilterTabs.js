@@ -16,7 +16,7 @@ const FilterTabs = ({
   const difficultyFilters = [
     { key: 'all', label: 'All Levels', count: stats.total, color: '#6b7280' },
     { key: 'easy', label: 'Easy', count: stats.easy, color: '#10b981' },
-    { key: 'medium', label: 'Medium', count: stats.medium, color: '#f59e0b' },
+    { key: 'medium', label: 'Medium', count: stats.medium, color: '#ecaa37ff' },
     { key: 'hard', label: 'Hard', count: stats.hard, color: '#ef4444' }
   ];
 

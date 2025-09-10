@@ -1,11 +1,15 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
+import { AuthContext } from '../context/AuthContext';
+import { API_BASE_URL } from '../config/config';
 import { 
   TrophyIcon, 
   ExclamationTriangleIcon, 
   ArrowPathIcon,
   FireIcon,
   CheckCircleIcon,
-  ChartBarIcon
+  ChartBarIcon,
+  CalendarIcon,
+  UserGroupIcon
 } from '@heroicons/react/24/outline';
 import { 
   TrophyIcon as TrophyIconSolid,
@@ -16,87 +20,162 @@ const LeaderboardPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [filter, setFilter] = useState('all-time');
+  const [lastUpdated, setLastUpdated] = useState(null);
 
   // Enhanced static demo data with more details
-  const staticLeaderboardData = useMemo(() => ({
-    'all-time': [
-      { 
-        id: 1, 
-        username: 'nitin', 
-        full_name: 'Nitin Verma', 
-        solved_count: 45, 
-        success_rate: 78.2, 
-        rank: 1,
-        total_attempts: 58,
-        streak: 12,
-        easy: 20,
-        medium: 18,
-        hard: 7
-      },
-      { 
-        id: 2, 
-        username: 'shivani', 
-        full_name: 'Shivani Kapoor', 
-        solved_count: 42, 
-        success_rate: 75.5, 
-        rank: 2,
-        total_attempts: 56,
-        streak: 8,
-        easy: 18,
-        medium: 16,
-        hard: 8
-      },
-      { 
-        id: 3, 
-        username: 'shivam', 
-        full_name: 'Shivam Tiwari', 
-        solved_count: 38, 
-        success_rate: 72.1, 
-        rank: 3,
-        total_attempts: 53,
-        streak: 5,
-        easy: 15,
-        medium: 15,
-        hard: 8
-      },
-      { id: 4, username: 'kajal', full_name: 'Kajal Deshmukh', solved_count: 35, success_rate: 68.9, rank: 4 },
-      { id: 5, username: 'neha', full_name: 'Neha Agarwal', solved_count: 32, success_rate: 65.3, rank: 5 },
-      { id: 6, username: 'muskan', full_name: 'Muskan Mehra', solved_count: 28, success_rate: 61.7, rank: 6 },
-      { id: 7, username: 'ankit', full_name: 'Ankit Bhatt', solved_count: 25, success_rate: 58.4, rank: 7 },
-      { id: 8, username: 'priya', full_name: 'Priya Joshi', solved_count: 22, success_rate: 55.2, rank: 8 },
-      { id: 9, username: 'rohit', full_name: 'Rohit Singh', solved_count: 19, success_rate: 52.1, rank: 9 },
-      { id: 10, username: 'sneha', full_name: 'Sneha Bansal', solved_count: 16, success_rate: 48.9, rank: 10 }
-    ],
-    'weekly': [
-      { id: 1, username: 'dhruv', full_name: 'Dhruv Patel', solved_count: 12, success_rate: 85.7, rank: 1, streak: 5 },
-      { id: 2, username: 'shivani', full_name: 'Shivani Kapoor', solved_count: 10, success_rate: 83.3, rank: 2, streak: 4 },
-      { id: 3, username: 'shivam', full_name: 'Shivam Tiwari', solved_count: 8, success_rate: 80.0, rank: 3, streak: 3 },
-      { id: 4, username: 'kajal', full_name: 'Kajal Deshmukh', solved_count: 7, success_rate: 77.8, rank: 4 },
-      { id: 5, username: 'neha', full_name: 'Neha Agarwal', solved_count: 6, success_rate: 75.0, rank: 5 }
-    ],
-    'daily': [
-      { id: 1, username: 'dhruv', full_name: 'Dhruv Patel', solved_count: 3, success_rate: 100.0, rank: 1, streak: 1 },
-      { id: 2, username: 'shivani', full_name: 'Shivani Kapoor', solved_count: 2, success_rate: 100.0, rank: 2, streak: 1 },
-      { id: 3, username: 'shivam', full_name: 'Shivam Tiwari', solved_count: 2, success_rate: 100.0, rank: 3, streak: 1 },
-      { id: 4, username: 'kajal', full_name: 'Kajal Deshmukh', solved_count: 1, success_rate: 100.0, rank: 4 }
-    ]
-  }), []);
+// Enhanced helper function to fetch GFG user photo with better error handling and caching
+const fetchGFGUserPhoto = async (username) => {
+  if (!username) return null;
+  
+  try {
+    console.log(`🔍 Fetching GFG photo for: ${username}`);
+    
+    // Add timeout to prevent hanging requests
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+    
+    const response = await fetch(`https://geeks-for-geeks-api.vercel.app/${username}`, {
+      signal: controller.signal,
+      headers: {
+        'Accept': 'application/json',
+        'User-Agent': 'DSA-Project/1.0'
+      }
+    });
+    
+    clearTimeout(timeoutId);
+    
+    if (response.ok) {
+      const data = await response.json();
+      console.log(`📸 GFG API response for ${username}:`, data);
+      
+      if (data.error) {
+        console.warn(`❌ GFG API error for ${username}:`, data.error);
+        return null;
+      }
+      
+      const profilePicture = data.info?.profilePicture;
+      const defaultAvatar = 'https://media.geeksforgeeks.org/img-practice/user_web-1598433228.svg';
+      
+      if (profilePicture && profilePicture !== defaultAvatar && profilePicture.startsWith('http')) {
+        console.log(`✅ Found profile picture for ${username}:`, profilePicture);
+        return profilePicture;
+      } else {
+        console.log(`📷 Using default avatar for ${username} (no custom profile picture)`);
+        return null;
+      }
+    } else {
+      console.warn(`❌ GFG API HTTP error for ${username}: ${response.status} ${response.statusText}`);
+      return null;
+    }
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      console.warn(`⏰ Timeout fetching GFG photo for ${username}`);
+    } else {
+      console.warn(`❌ Failed to fetch GFG photo for ${username}:`, error.message);
+    }
+    return null;
+  }
+};
+
+// Fetch leaderboard data from backend API
+const fetchLeaderboardData = async (filter) => {
+  try {
+    const periodMap = {
+      'daily': 'daily',
+      'weekly': 'weekly', 
+      'all-time': 'all-time'
+    };
+    
+    const period = periodMap[filter] || 'all-time';
+    const response = await fetch(`${API_BASE_URL}/api/leaderboard?period=${period}`);
+    
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    
+    if (!data || data.length === 0) {
+      throw new Error('No leaderboard data available');
+    }
+    
+    // Limit to top 10 users
+    const top10Data = data.slice(0, 10);
+    
+    // Fetch user profiles and photos from GFG API
+    const enrichedData = await Promise.all(
+      top10Data.map(async (user) => {
+        try {
+          // First try to get user profile from backend
+          const userResponse = await fetch(`${API_BASE_URL}/api/users/${user.id}`);
+          let profilePhoto = null;
+          let gfgUsername = null;
+          
+          if (userResponse.ok) {
+            const userProfile = await userResponse.json();
+            profilePhoto = userProfile.profile_photo;
+            gfgUsername = userProfile.geeksforgeeks_username;
+            
+            console.log(`👤 User ${user.username} profile:`, {
+              id: user.id,
+              gfgUsername,
+              hasProfilePhoto: !!profilePhoto
+            });
+            
+            // If no photo in profile, try to fetch from GFG API
+            if (!profilePhoto && gfgUsername) {
+              console.log(`🔄 Fetching GFG photo for user ${user.username} with GFG username: ${gfgUsername}`);
+              profilePhoto = await fetchGFGUserPhoto(gfgUsername);
+            }
+          }
+          
+          return {
+            ...user,
+            photo: profilePhoto,
+            streak: Math.floor(Math.random() * 30) + 1, // Mock streak for now
+            easy: Math.floor(user.solved_count * 0.4),
+            medium: Math.floor(user.solved_count * 0.4), 
+            hard: Math.floor(user.solved_count * 0.2)
+          };
+        } catch (error) {
+          console.warn(`Failed to fetch profile for user ${user.id}:`, error);
+          return {
+            ...user,
+            photo: null,
+            streak: Math.floor(Math.random() * 30) + 1,
+            easy: Math.floor(user.solved_count * 0.4),
+            medium: Math.floor(user.solved_count * 0.4), 
+            hard: Math.floor(user.solved_count * 0.2)
+          };
+        }
+      })
+    );
+    
+    return enrichedData;
+  } catch (error) {
+    console.error('Error fetching leaderboard data:', error);
+    throw new Error('Failed to fetch leaderboard data. Please check if the backend server is running.');
+  }
+};
 
   useEffect(() => {
     const fetchLeaderboard = async () => {
       try {
         setLoading(true);
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        setLeaderboardData(staticLeaderboardData[filter] || []);
+        setError(''); // Clear any previous errors
+const data = await fetchLeaderboardData(filter);
+        setLeaderboardData(data);
+        setLastUpdated(new Date());
       } catch (err) {
-        setError('Failed to fetch leaderboard data');
+        console.error('Leaderboard fetch error:', err);
+        setError(`Failed to fetch leaderboard data: ${err.message}`);
       } finally {
         setLoading(false);
       }
     };
 
     fetchLeaderboard();
-  }, [filter, staticLeaderboardData]);
+  }, [filter]);
 
   const getAvatarInitials = (name) => {
     return name.split(' ').map(n => n[0]).join('').toUpperCase();
@@ -109,6 +188,46 @@ const LeaderboardPage = () => {
       3: 'bg-gradient-to-br from-orange-400 to-orange-600'
     };
     return colors[rank] || 'bg-gradient-to-br from-blue-400 to-blue-600';
+  };
+
+  const UserAvatar = ({ user, size = 'w-10 h-10', textSize = 'text-sm', showBorder = false }) => {
+    const [imageError, setImageError] = useState(false);
+    const [imageLoading, setImageLoading] = useState(true);
+    
+    const handleImageLoad = () => {
+      setImageLoading(false);
+    };
+    
+    const handleImageError = () => {
+      setImageError(true);
+      setImageLoading(false);
+    };
+    
+    if (imageError || !user.photo) {
+      return (
+        <div className={`${size} rounded-full bg-gradient-to-br from-purple-400 to-purple-600 flex items-center justify-center text-white font-semibold ${textSize} shadow-lg ${showBorder ? 'ring-2 ring-white ring-offset-2' : ''}`}>
+          {getAvatarInitials(user.full_name || user.username)}
+        </div>
+      );
+    }
+    
+    return (
+      <div className={`${size} rounded-full overflow-hidden relative shadow-lg ${showBorder ? 'ring-2 ring-white ring-offset-2' : ''}`}>
+        {imageLoading && (
+          <div className="absolute inset-0 bg-gradient-to-br from-gray-200 to-gray-300 animate-pulse flex items-center justify-center">
+            <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
+          </div>
+        )}
+        <img 
+          src={user.photo} 
+          alt={`${user.full_name || user.username} profile`}
+          className={`w-full h-full object-cover transition-opacity duration-300 ${imageLoading ? 'opacity-0' : 'opacity-100'}`}
+          onLoad={handleImageLoad}
+          onError={handleImageError}
+          loading="lazy"
+        />
+      </div>
+    );
   };
 
 
@@ -156,6 +275,78 @@ const LeaderboardPage = () => {
             <h1 className="text-4xl font-bold text-gray-800 dark:text-white">Leaderboard</h1>
           </div>
           <p className="text-xl text-gray-600 dark:text-gray-300">Celebrating our coding champions</p>
+          
+          {/* Stats and Last Updated */}
+          <div className="flex justify-center items-center gap-6 mt-4">
+            <div className="flex items-center text-gray-500 dark:text-gray-400">
+              <UserGroupIcon className="w-4 h-4 mr-1" />
+              <span className="text-sm">{leaderboardData.length} participants</span>
+            </div>
+            {lastUpdated && (
+              <div className="flex items-center text-gray-500 dark:text-gray-400">
+                <CalendarIcon className="w-4 h-4 mr-1" />
+                <span className="text-sm">Updated {lastUpdated.toLocaleTimeString()}</span>
+              </div>
+            )}
+            <button
+              onClick={() => {
+                setError('');
+                setLoading(true);
+                const fetchLeaderboard = async () => {
+                  try {
+                    const data = await fetchLeaderboardData(filter);
+                    setLeaderboardData(data);
+                    setLastUpdated(new Date());
+                  } catch (err) {
+                    setError('Failed to fetch leaderboard data');
+                  } finally {
+                    setLoading(false);
+                  }
+                };
+                fetchLeaderboard();
+              }}
+              className="flex items-center text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
+            >
+              <ArrowPathIcon className="w-4 h-4 mr-1" />
+              <span className="text-sm">Refresh</span>
+            </button>
+            
+            <button
+              onClick={async () => {
+                try {
+                  setLoading(true);
+                  // Trigger backend sync to update all user photos
+                  const response = await fetch(`${API_BASE_URL}/api/sync-all-progress`, {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json'
+                    }
+                  });
+                  
+                  if (response.ok) {
+                    // Refresh leaderboard data after sync
+                    const data = await fetchLeaderboardData(filter);
+                    setLeaderboardData(data);
+                    setLastUpdated(new Date());
+                    console.log('✅ GFG photos synced successfully');
+                  } else {
+                    console.warn('⚠️ Failed to sync GFG photos');
+                  }
+                } catch (error) {
+                  console.error('❌ Error syncing GFG photos:', error);
+                } finally {
+                  setLoading(false);
+                }
+              }}
+              className="flex items-center text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300 transition-colors"
+              title="Sync GFG profile photos"
+            >
+              <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              <span className="text-sm">Sync Photos</span>
+            </button>
+          </div>
         </div>
 
         {/* Filter Buttons */}
@@ -178,7 +369,7 @@ const LeaderboardPage = () => {
         </div>
 
         {/* Podium for Top 3 */}
-        {topThree.length >= 3 && (
+        {topThree.length >= 1 && (
           <div className="mb-16">
             {/* Winner (1st Place) - Larger and Centered */}
             <div className="flex justify-center mb-8">
@@ -193,8 +384,8 @@ const LeaderboardPage = () => {
                   
                   {/* Avatar */}
                   <div className="flex flex-col items-center">
-                    <div className={`w-24 h-24 rounded-full ${getAvatarColor(1)} flex items-center justify-center text-white text-2xl font-bold shadow-lg mb-4`}>
-                      {getAvatarInitials(topThree[0].full_name || topThree[0].username)}
+                    <div className="w-24 h-24 mb-4">
+                      <UserAvatar user={topThree[0]} size="w-24 h-24" textSize="text-2xl" showBorder={true} />
                     </div>
                     
                     {/* User Info */}
@@ -238,53 +429,59 @@ const LeaderboardPage = () => {
             </div>
 
             {/* 2nd and 3rd Place Side by Side */}
-            <div className="flex justify-center gap-8">
-              {/* 2nd Place */}
-              <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-xl border-2 border-gray-300 transform hover:scale-105 transition-all duration-300">
-                <div className="flex flex-col items-center">
-                  <div className={`w-20 h-20 rounded-full ${getAvatarColor(2)} flex items-center justify-center text-white text-xl font-bold shadow-lg mb-3`}>
-                    {getAvatarInitials(topThree[1].full_name || topThree[1].username)}
-                  </div>
-                  <h3 className="text-xl font-bold text-gray-800 dark:text-white mb-2">
-                    {topThree[1].full_name || topThree[1].username}
-                  </h3>
-                  <div className="text-gray-500 font-semibold mb-3">🥈 Runner-up</div>
-                  <div className="grid grid-cols-2 gap-3 w-full">
-                    <div className="text-center bg-green-50 dark:bg-green-900/20 rounded-lg p-2">
-                      <div className="text-lg font-bold text-green-600">{topThree[1].solved_count}</div>
-                      <div className="text-xs text-gray-600 dark:text-gray-300">Solved</div>
+            {topThree.length >= 2 && (
+              <div className="flex justify-center gap-8">
+                {/* 2nd Place */}
+                {topThree[1] && (
+                  <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-xl border-2 border-gray-300 transform hover:scale-105 transition-all duration-300">
+                    <div className="flex flex-col items-center">
+                      <div className="w-20 h-20 mb-3">
+                        <UserAvatar user={topThree[1]} size="w-20 h-20" textSize="text-xl" showBorder={true} />
+                      </div>
+                      <h3 className="text-xl font-bold text-gray-800 dark:text-white mb-2">
+                        {topThree[1].full_name || topThree[1].username}
+                      </h3>
+                      <div className="text-gray-500 font-semibold mb-3">🥈 Runner-up</div>
+                      <div className="grid grid-cols-2 gap-3 w-full">
+                        <div className="text-center bg-green-50 dark:bg-green-900/20 rounded-lg p-2">
+                          <div className="text-lg font-bold text-green-600">{topThree[1].solved_count}</div>
+                          <div className="text-xs text-gray-600 dark:text-gray-300">Solved</div>
+                        </div>
+                        <div className="text-center bg-blue-50 dark:bg-blue-900/20 rounded-lg p-2">
+                          <div className="text-lg font-bold text-blue-600">{topThree[1].success_rate}%</div>
+                          <div className="text-xs text-gray-600 dark:text-gray-300">Success</div>
+                        </div>
+                      </div>
                     </div>
-                    <div className="text-center bg-blue-50 dark:bg-blue-900/20 rounded-lg p-2">
-                      <div className="text-lg font-bold text-blue-600">{topThree[1].success_rate}%</div>
-                      <div className="text-xs text-gray-600 dark:text-gray-300">Success</div>
-                    </div>
                   </div>
-                </div>
-              </div>
+                )}
 
-              {/* 3rd Place */}
-              <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-xl border-2 border-orange-300 transform hover:scale-105 transition-all duration-300">
-                <div className="flex flex-col items-center">
-                  <div className={`w-20 h-20 rounded-full ${getAvatarColor(3)} flex items-center justify-center text-white text-xl font-bold shadow-lg mb-3`}>
-                    {getAvatarInitials(topThree[2].full_name || topThree[2].username)}
-                  </div>
-                  <h3 className="text-xl font-bold text-gray-800 dark:text-white mb-2">
-                    {topThree[2].full_name || topThree[2].username}
-                  </h3>
-                  <div className="text-orange-600 font-semibold mb-3">🥉 Third Place</div>
-                  <div className="grid grid-cols-2 gap-3 w-full">
-                    <div className="text-center bg-green-50 dark:bg-green-900/20 rounded-lg p-2">
-                      <div className="text-lg font-bold text-green-600">{topThree[2].solved_count}</div>
-                      <div className="text-xs text-gray-600 dark:text-gray-300">Solved</div>
+                {/* 3rd Place */}
+                {topThree[2] && (
+                  <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-xl border-2 border-orange-300 transform hover:scale-105 transition-all duration-300">
+                    <div className="flex flex-col items-center">
+                      <div className="w-20 h-20 mb-3">
+                        <UserAvatar user={topThree[2]} size="w-20 h-20" textSize="text-xl" showBorder={true} />
+                      </div>
+                      <h3 className="text-xl font-bold text-gray-800 dark:text-white mb-2">
+                        {topThree[2].full_name || topThree[2].username}
+                      </h3>
+                      <div className="text-orange-600 font-semibold mb-3">🥉 Third Place</div>
+                      <div className="grid grid-cols-2 gap-3 w-full">
+                        <div className="text-center bg-green-50 dark:bg-green-900/20 rounded-lg p-2">
+                          <div className="text-lg font-bold text-green-600">{topThree[2].solved_count}</div>
+                          <div className="text-xs text-gray-600 dark:text-gray-300">Solved</div>
+                        </div>
+                        <div className="text-center bg-blue-50 dark:bg-blue-900/20 rounded-lg p-2">
+                          <div className="text-lg font-bold text-blue-600">{topThree[2].success_rate}%</div>
+                          <div className="text-xs text-gray-600 dark:text-gray-300">Success</div>
+                        </div>
+                      </div>
                     </div>
-                    <div className="text-center bg-blue-50 dark:bg-blue-900/20 rounded-lg p-2">
-                      <div className="text-lg font-bold text-blue-600">{topThree[2].success_rate}%</div>
-                      <div className="text-xs text-gray-600 dark:text-gray-300">Success</div>
-                    </div>
                   </div>
-                </div>
+                )}
               </div>
-            </div>
+            )}
           </div>
         )}
 
@@ -323,8 +520,8 @@ const LeaderboardPage = () => {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center">
-                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-400 to-purple-600 flex items-center justify-center text-white font-semibold mr-4">
-                              {getAvatarInitials(user.full_name || user.username)}
+                            <div className="mr-4">
+                              <UserAvatar user={user} size="w-10 h-10" textSize="text-sm" />
                             </div>
                             <div>
                               <div className="text-sm font-medium text-gray-900 dark:text-white">

@@ -3,11 +3,10 @@ import axios from 'axios';
 import { BookmarkIcon, ClipboardDocumentListIcon, ChartBarIcon } from '@heroicons/react/24/outline';
 import QuestionCard from '../components/QuestionCard';
 import { AuthContext } from '../context/AuthContext';
-
-const API_BASE_URL = 'http://localhost:3001';
+import { API_BASE_URL, API_ENDPOINTS } from '../config/config';
 
 const BookmarksPage = () => {
-  const { user, token } = useContext(AuthContext);
+  const { user, accessToken } = useContext(AuthContext);
   const [questions, setQuestions] = useState([]);
   const [bookmarkedQuestions, setBookmarkedQuestions] = useState({});
   const [userProgress, setUserProgress] = useState({});
@@ -27,27 +26,28 @@ const BookmarksPage = () => {
 
   // Fetch all questions
   const fetchQuestions = useCallback(async () => {
+    if (!user || !accessToken) return;
+    
     try {
-      setLoading(true);
-      const response = await axios.get(`${API_BASE_URL}/questions`);
+      const response = await axios.get(API_ENDPOINTS.QUESTIONS, {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
       setQuestions(response.data);
       
-      // Load bookmarks from local storage
-      const savedBookmarks = getBookmarkedQuestions();
-      setBookmarkedQuestions(savedBookmarks);
     } catch (error) {
       console.error('Error fetching questions:', error);
     } finally {
       setLoading(false);
     }
-  }, [getBookmarkedQuestions]);
+  }, [user, accessToken]);
 
   // Fetch user progress
   const fetchUserProgress = useCallback(async () => {
-    if (!user || !token) return;
+    if (!user || !accessToken) return;
+    
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/progress/${user.id}`, {
-        headers: { Authorization: `Bearer ${token}` }
+      const response = await axios.get(`${API_BASE_URL}/api/users/${user.id}/progress`, {
+        headers: { Authorization: `Bearer ${accessToken}` }
       });
       const progressMap = {};
       response.data.forEach(progress => {
@@ -57,11 +57,11 @@ const BookmarksPage = () => {
     } catch (error) {
       console.error('Error fetching user progress:', error);
     }
-  }, [user, token]);
+  }, [user, accessToken]);
 
   // Toggle solved status
   const toggleSolved = async (questionId) => {
-    if (!user || !token) return;
+    if (!user || !accessToken) return;
     try {
       const currentStatus = userProgress[questionId]?.is_solved || false;
       await axios.post(`${API_BASE_URL}/api/progress`, {
@@ -69,7 +69,7 @@ const BookmarksPage = () => {
         questionId: questionId,
         isSolved: !currentStatus
       }, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${accessToken}` }
       });
 
       // Update local state
@@ -88,22 +88,28 @@ const BookmarksPage = () => {
   };
 
   // Toggle bookmark
-  const toggleBookmark = (questionId) => {
-    const newBookmarks = {
-      ...bookmarkedQuestions,
-      [questionId]: !bookmarkedQuestions[questionId]
-    };
-    setBookmarkedQuestions(newBookmarks);
-    saveBookmarks(newBookmarks);
+  const toggleBookmark = async (questionId) => {
+    if (!user || !accessToken) return;
+    
+    try {
+      await axios.post(`${API_BASE_URL}/api/users/${user.id}/bookmarks/${questionId}`, {}, {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
+      fetchUserProgress();
+    } catch (error) {
+      console.error('Error toggling bookmark:', error);
+    }
   };
 
   useEffect(() => {
     const fetchAllData = async () => {
-      await fetchQuestions();
-      await fetchUserProgress();
+      if (user && accessToken) {
+        await fetchQuestions();
+        await fetchUserProgress();
+      }
     };
     fetchAllData();
-  }, [user, token, fetchQuestions, fetchUserProgress]);
+  }, [user, accessToken]);
 
   // Filter only bookmarked questions
   const bookmarkedQuestionsList = questions.filter(question => 

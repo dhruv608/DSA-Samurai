@@ -3,8 +3,21 @@ import { StarIcon, CheckIcon } from '@heroicons/react/24/outline';
 import { StarIcon as StarIconSolid, CheckIcon as CheckIconSolid } from '@heroicons/react/24/solid';
 import { AuthContext } from '../context/AuthContext';
 
+// Helper function to identify platform based on URL
+const identifyPlatform = (url) => {
+  if (url.includes('geeksforgeeks.org') || url.includes('practice.geeksforgeeks.org')) {
+    return 'gfg';
+  } else if (url.includes('leetcode.com')) {
+    return 'leetcode';
+  } else if (url.includes('interviewbit.com')) {
+    return 'interviewbit';
+  }
+  return 'unknown';
+};
+
 const QuestionCard = ({ question, isSolved, onToggleSolved, isBookmarked, onToggleBookmark }) => {
   const { user } = useContext(AuthContext);
+  const platform = identifyPlatform(question.question_link);
 
   return (
     <div 
@@ -65,28 +78,50 @@ const QuestionCard = ({ question, isSolved, onToggleSolved, isBookmarked, onTogg
           </button>
         )}
         
-        {/* Mark solved button */}
+        {/* Mark solved button or auto-detection indicator */}
         {user && (
-          <button 
-            onClick={onToggleSolved}
-            className={`px-4 py-2 text-white text-sm rounded transition-colors duration-200 ${
+          platform === 'gfg' ? (
+            /* Auto-detection indicator for GFG questions */
+            <div className={`px-4 py-2 text-sm rounded flex items-center ${
               isSolved 
-                ? 'bg-red-500 hover:bg-red-600' 
-                : 'bg-green-500 hover:bg-green-600'
-            }`}
-          >
-            {isSolved ? (
-              <>
-                <CheckIconSolid className="inline-block w-4 h-4 mr-1" />
-                Solved
-              </>
-            ) : (
-              <>
-                <CheckIcon className="inline-block w-4 h-4 mr-1" />
-                Mark Solved
-              </>
-            )}
-          </button>
+                ? 'bg-green-100 text-green-800 border border-green-300'
+                : 'bg-gray-100 text-gray-600 border border-gray-300'
+            }`}>
+              {isSolved ? (
+                <>
+                  <CheckIconSolid className="inline-block w-4 h-4 mr-1 text-green-600" />
+                  Auto-Detected
+                </>
+              ) : (
+                <>
+                  <CheckIcon className="inline-block w-4 h-4 mr-1" />
+                  Auto-Sync
+                </>
+              )}
+            </div>
+          ) : (
+            /* Manual mark button for non-GFG questions */
+            <button 
+              onClick={onToggleSolved}
+              className={`px-4 py-2 text-white text-sm rounded transition-colors duration-200 ${
+                isSolved 
+                  ? 'bg-red-500 hover:bg-red-600' 
+                  : 'bg-green-500 hover:bg-green-600'
+              }`}
+            >
+              {isSolved ? (
+                <>
+                  <CheckIconSolid className="inline-block w-4 h-4 mr-1" />
+                  Solved
+                </>
+              ) : (
+                <>
+                  <CheckIcon className="inline-block w-4 h-4 mr-1" />
+                  Mark Solved
+                </>
+              )}
+            </button>
+          )
         )}
       </div>
     </div>

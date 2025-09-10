@@ -13,6 +13,8 @@ import BookmarksPage from './pages/BookmarksPage';
 // import HomePage from './pages/HomePage';
 import QuestionsPage from './pages/QuestionsPage';
 import AdminDashboard from './pages/AdminDashboard';
+import UsersPage from './pages/UsersPage';
+import ProgressPage from './pages/ProgressPage';
 
 // const ProtectedRoute = ({ children, requiredRole }) => {
 //   const { user } = useContext(AuthContext);
@@ -69,6 +71,8 @@ function AppContent() {
                   <Routes>
                     <Route path="/" element={<AdminDashboard />} />
                     <Route path="/questions" element={<QuestionsPage />} />
+                    <Route path="/admin/users" element={<UsersPage />} />
+                    <Route path="/admin/progress" element={<ProgressPage />} />
                     <Route path="*" element={<Navigate to="/" replace />} />
                   </Routes>
                 </main>

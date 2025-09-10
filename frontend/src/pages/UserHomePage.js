@@ -15,11 +15,10 @@ import {
 import QuestionCard from '../components/QuestionCard';
 import FilterTabs from '../components/FilterTabs';
 import { AuthContext } from '../context/AuthContext';
-
-const API_BASE_URL = 'http://localhost:3001';
+import { API_BASE_URL, API_ENDPOINTS } from '../config/config';
 
 const UserHomePage = () => {
-  const { user, token } = useContext(AuthContext);
+  const { user, accessToken } = useContext(AuthContext);
   const [questions, setQuestions] = useState([]);
   const [filteredQuestions, setFilteredQuestions] = useState([]);
   const [userProgress, setUserProgress] = useState({});
@@ -33,18 +32,14 @@ const UserHomePage = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [bookmarkedQuestions, setBookmarkedQuestions] = useState({});
 
-  // Get bookmarked questions from local storage
-  const getBookmarkedQuestions = useCallback(() => {
-    if (!user?.id) return {};
-    const saved = localStorage.getItem(`bookmarks_${user.id}`);
-    return saved ? JSON.parse(saved) : {};
-  }, [user?.id]);
-
   // Fetch all questions
   const fetchQuestions = useCallback(async () => {
+    if (!user || !accessToken) return;
+    
     try {
-      setLoading(true);
-      const response = await axios.get(`${API_BASE_URL}/questions`);
+      const response = await axios.get(API_ENDPOINTS.QUESTIONS, {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
       setQuestions(response.data);
       setFilteredQuestions(response.data);
     } catch (error) {
@@ -52,14 +47,15 @@ const UserHomePage = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user, accessToken]);
 
   // Fetch user progress
   const fetchUserProgress = useCallback(async () => {
-    if (!user || !token) return;
+    if (!user || !accessToken) return;
+    
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/progress/${user.id}`, {
-        headers: { Authorization: `Bearer ${token}` }
+      const response = await axios.get(`${API_BASE_URL}/api/users/${user.id}/progress`, {
+        headers: { Authorization: `Bearer ${accessToken}` }
       });
       const progressMap = {};
       response.data.forEach(progress => {
@@ -69,19 +65,33 @@ const UserHomePage = () => {
     } catch (error) {
       console.error('Error fetching user progress:', error);
     }
-  }, [user, token]);
+  }, [user, accessToken]);
+
+  // Get bookmarked questions from local storage
+  const getBookmarkedQuestions = useCallback(async () => {
+    if (!user || !accessToken) return;
+    
+    try {
+      const response = await axios.get(`${API_BASE_URL}/api/users/${user.id}/bookmarks`, {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
+      setBookmarkedQuestions(response.data);
+    } catch (error) {
+      console.error('Error fetching bookmarks:', error);
+    }
+  }, [user, accessToken]);
 
   // Toggle solved status
   const toggleSolved = async (questionId) => {
-    if (!user || !token) return;
+    if (!user || !accessToken) return;
+    
     try {
       const currentStatus = userProgress[questionId]?.is_solved || false;
-      await axios.post(`${API_BASE_URL}/api/progress`, {
-        userId: user.id,
-        questionId: questionId,
+      await axios.post(`${API_BASE_URL}/api/users/${user.id}/progress`, {
+        questionId,
         isSolved: !currentStatus
       }, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${accessToken}` }
       });
 
       // Update local state
@@ -96,6 +106,105 @@ const UserHomePage = () => {
       }));
     } catch (error) {
       console.error('Error updating progress:', error);
+    }
+  };
+
+  // Refresh solved status from GFG API
+  const refreshGFGStatus = async () => {
+    if (!user || !accessToken) return;
+    
+    try {
+      setLoading(true);
+      
+      // Sync progress with GeeksforGeeks API using user ID
+      const response = await axios.get(`${API_BASE_URL}/api/sync-gfg-progress/${user.id}`, {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
+      
+      // Refresh user progress
+      await fetchUserProgress();
+      
+      const stats = response.data.stats;
+      alert(`GFG Progress synchronized!\n\nFound ${stats.totalGFGQuestions} GFG questions in database\nSolved ${stats.solvedQuestions} questions\nUpdated ${stats.updatedQuestions} records`);
+    } catch (error) {
+      console.error('Error refreshing GFG status:', error);
+      if (error.response?.status === 400) {
+        alert('Please add your GeeksforGeeks username in your profile first.');
+      } else {
+        alert('Failed to synchronize GFG progress. Please try again.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Refresh solved status from LeetCode API
+  const refreshLeetCodeStatus = async () => {
+    if (!user || !accessToken) return;
+    
+    try {
+      setLoading(true);
+      
+      // Sync progress with LeetCode API using user ID
+      const response = await axios.get(`${API_BASE_URL}/api/sync-leetcode-progress/${user.id}`, {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
+      
+      // Refresh user progress
+      await fetchUserProgress();
+      
+      const stats = response.data.stats;
+      alert(`LeetCode Progress synchronized!\n\nFound ${stats.totalLeetCodeQuestions} LeetCode questions in database\nSolved ${stats.solvedQuestions} questions\nUpdated ${stats.updatedQuestions} records`);
+    } catch (error) {
+      console.error('Error refreshing LeetCode status:', error);
+      if (error.response?.status === 400) {
+        alert('Please add your LeetCode username in your profile first.');
+      } else {
+        alert('Failed to synchronize LeetCode progress. Please try again.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Refresh solved status from both GFG and LeetCode APIs
+  const refreshAllStatus = async () => {
+    if (!user || !accessToken) return;
+    
+    try {
+      setLoading(true);
+      
+      // Sync progress with both platforms
+      const response = await axios.get(`${API_BASE_URL}/api/sync-all-progress/${user.id}`, {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
+      
+      // Refresh user progress
+      await fetchUserProgress();
+      
+      const results = response.data.results;
+      let message = 'Progress synchronized for all platforms!\n\n';
+      
+      if (results.gfg && results.gfg.success) {
+        const gfgStats = results.gfg.stats;
+        message += `GFG: Updated ${gfgStats.updatedQuestions} out of ${gfgStats.totalGFGQuestions} questions\n`;
+      } else {
+        message += `GFG: ${results.gfg?.error || 'Failed to sync'}\n`;
+      }
+      
+      if (results.leetcode && results.leetcode.success) {
+        const lcStats = results.leetcode.stats;
+        message += `LeetCode: Updated ${lcStats.updatedQuestions} out of ${lcStats.totalLeetCodeQuestions} questions\n`;
+      } else {
+        message += `LeetCode: ${results.leetcode?.error || 'Failed to sync'}\n`;
+      }
+      
+      alert(message);
+    } catch (error) {
+      console.error('Error refreshing all status:', error);
+      alert('Failed to synchronize progress. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -162,16 +271,14 @@ const UserHomePage = () => {
   // Load questions and progress on component mount
   useEffect(() => {
     const fetchAllData = async () => {
-      await fetchQuestions();
-      await fetchUserProgress();
-      // Load bookmarks from localStorage
-      if (user?.id) {
-        const savedBookmarks = getBookmarkedQuestions();
-        setBookmarkedQuestions(savedBookmarks);
+      if (user && accessToken) {
+        await fetchQuestions();
+        await fetchUserProgress();
+        await getBookmarkedQuestions();
       }
     };
     fetchAllData();
-  }, [user, token, fetchQuestions, fetchUserProgress, getBookmarkedQuestions]);
+  }, [user, accessToken]);
 
   // Get statistics
   const getStats = () => {
@@ -194,13 +301,17 @@ const UserHomePage = () => {
     localStorage.setItem(`bookmarks_${user.id}`, JSON.stringify(bookmarks));
   };
 
-  const toggleBookmark = (questionId) => {
-    const newBookmarks = {
-      ...bookmarkedQuestions,
-      [questionId]: !bookmarkedQuestions[questionId]
-    };
-    setBookmarkedQuestions(newBookmarks);
-    saveBookmarks(newBookmarks);
+  const toggleBookmark = async (questionId) => {
+    if (!user || !accessToken) return;
+    
+    try {
+      await axios.post(`${API_BASE_URL}/api/users/${user.id}/bookmarks/${questionId}`, {}, {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
+      fetchUserProgress();
+    } catch (error) {
+      console.error('Error toggling bookmark:', error);
+    }
   };
 
   const paginate = (questions) => {
@@ -353,8 +464,46 @@ const UserHomePage = () => {
                   ? 'Homework Questions'
                   : 'Classwork Questions'}
             </h2>
-            <div className="results-count">
-              {filteredQuestions.length} questions
+            <div className="flex items-center space-x-4">
+              <div className="results-count">
+                {filteredQuestions.length} questions
+              </div>
+              {user && (
+                <div className="flex items-center space-x-2">
+                  <button 
+                    onClick={refreshGFGStatus}
+                    disabled={loading}
+                    className="px-3 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white text-sm rounded-lg transition-colors duration-200 flex items-center space-x-2"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    <span>{loading ? 'Syncing...' : 'Sync GFG'}</span>
+                  </button>
+                  
+                  <button 
+                    onClick={refreshLeetCodeStatus}
+                    disabled={loading}
+                    className="px-3 py-2 bg-orange-600 hover:bg-orange-700 disabled:bg-gray-400 text-white text-sm rounded-lg transition-colors duration-200 flex items-center space-x-2"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    <span>{loading ? 'Syncing...' : 'Sync LC'}</span>
+                  </button>
+                  
+                  <button 
+                    onClick={refreshAllStatus}
+                    disabled={loading}
+                    className="px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white text-sm rounded-lg transition-colors duration-200 flex items-center space-x-2"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    <span>{loading ? 'Syncing...' : 'Sync All'}</span>
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 

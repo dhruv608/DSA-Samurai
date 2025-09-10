@@ -2,13 +2,19 @@ import React, { useState, useEffect, useContext } from 'react';
 import axios from 'axios';
 import { 
   UserIcon, 
-  PencilIcon, 
-  CheckIcon, 
-  XMarkIcon, 
+  EnvelopeIcon, 
+  PhoneIcon, 
+  MapPinIcon, 
+  AcademicCapIcon, 
+  GlobeAltIcon,
+  PencilIcon,
+  CheckIcon,
+  XMarkIcon,
   LinkIcon,
-  ArrowRightStartOnRectangleIcon 
+  ArrowRightStartOnRectangleIcon
 } from '@heroicons/react/24/outline';
 import { AuthContext } from '../context/AuthContext';
+import { API_BASE_URL } from '../config/config';
 
 const ProfilePage = () => {
   const { user, logout } = useContext(AuthContext);
@@ -16,13 +22,32 @@ const ProfilePage = () => {
   const [profileData, setProfileData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [formData, setFormData] = useState({
+    full_name: '',
+    email: '',
+    phone: '',
+    location: '',
+    education: '',
+    leetcode_username: '',
+    geeksforgeeks_username: ''
+  });
 
   useEffect(() => {
     const fetchProfile = async () => {
       try {
         setLoading(true);
-        const response = await axios.get(`http://localhost:3001/api/users/${user.id}`);
+        const response = await axios.get(`${API_BASE_URL}/api/users/${user.id}`);
         setProfileData(response.data);
+        setFormData({
+          full_name: response.data.full_name || '',
+          email: response.data.email || '',
+          phone: response.data.phone || '',
+          location: response.data.location || '',
+          education: response.data.education || '',
+          leetcode_username: response.data.leetcode_username || '',
+          geeksforgeeks_username: response.data.geeksforgeeks_username || ''
+        });
       } catch (err) {
         setError('Failed to fetch profile data');
       } finally {
@@ -37,23 +62,41 @@ const ProfilePage = () => {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setProfileData(prev => ({
+    setFormData(prev => ({
       ...prev,
       [name]: value
     }));
   };
 
   const handleSave = async () => {
+    setLoading(true);
+    setError('');
+    setSuccess('');
+
     try {
-      await axios.put(`http://localhost:3001/api/users/${user.id}`, {
-        fullName: profileData.full_name,
-        leetcodeUsername: profileData.leetcode_username,
-        geeksforgeeksUsername: profileData.geeksforgeeks_username
+      await axios.put(`${API_BASE_URL}/api/users/${user.id}`, {
+        full_name: formData.full_name,
+        email: formData.email,
+        phone: formData.phone,
+        location: formData.location,
+        education: formData.education,
+        leetcode_username: formData.leetcode_username,
+        geeksforgeeks_username: formData.geeksforgeeks_username
       });
-      setIsEditing(false);
-      alert('Profile updated successfully!');
-    } catch (err) {
-      alert('Failed to update profile');
+
+      setSuccess('Profile updated successfully!');
+      setError('');
+      
+      // Refresh user data
+      const response = await axios.get(`${API_BASE_URL}/api/users/${user.id}`);
+      const updatedUser = response.data;
+      // Update context with new user data
+      // You might need to add an updateUser function to your AuthContext
+    } catch (error) {
+      setError(error.response?.data?.error || 'Failed to update profile');
+      setSuccess('');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -61,8 +104,17 @@ const ProfilePage = () => {
     // Re-fetch profile to discard changes
     const fetchProfile = async () => {
       try {
-        const response = await axios.get(`http://localhost:3001/api/users/${user.id}`);
+        const response = await axios.get(`${API_BASE_URL}/api/users/${user.id}`);
         setProfileData(response.data);
+        setFormData({
+          full_name: response.data.full_name || '',
+          email: response.data.email || '',
+          phone: response.data.phone || '',
+          location: response.data.location || '',
+          education: response.data.education || '',
+          leetcode_username: response.data.leetcode_username || '',
+          geeksforgeeks_username: response.data.geeksforgeeks_username || ''
+        });
       } catch (err) {
         setError('Failed to reload profile data');
       }
@@ -133,7 +185,7 @@ const ProfilePage = () => {
                         type="text"
                         id="fullName"
                         name="full_name"
-                        value={profileData.full_name || ''}
+                        value={formData.full_name || ''}
                         onChange={handleInputChange}
                         className="profile-input"
                     />
@@ -149,7 +201,7 @@ const ProfilePage = () => {
                     type="text"
                     id="leetcode_username"
                     name="leetcode_username"
-                    value={profileData.leetcode_username || ''}
+                    value={formData.leetcode_username || ''}
                     onChange={handleInputChange}
                     className="profile-input"
                   />
@@ -177,7 +229,7 @@ const ProfilePage = () => {
                     type="text"
                     id="geeksforgeeks_username"
                     name="geeksforgeeks_username"
-                    value={profileData.geeksforgeeks_username || ''}
+                    value={formData.geeksforgeeks_username || ''}
                     onChange={handleInputChange}
                     className="profile-input"
                   />

@@ -2,20 +2,23 @@ import React, { useState, useContext } from 'react';
 import axios from 'axios';
 import { ComputerDesktopIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 import { AuthContext } from '../context/AuthContext';
+import { API_ENDPOINTS } from '../config/config';
 
 const Login = () => {
   const [formData, setFormData] = useState({
     username: '',
-    password: ''
+    password: '',
+    rememberMe: false
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { login } = useContext(AuthContext);
 
   const handleChange = (e) => {
+    const value = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
     setFormData({
       ...formData,
-      [e.target.name]: e.target.value
+      [e.target.name]: value
     });
   };
 
@@ -25,9 +28,9 @@ const Login = () => {
     setError('');
 
     try {
-      const response = await axios.post('http://localhost:3001/api/auth/login', formData);
-      const { token, user } = response.data;
-      login(user, token);
+      const response = await axios.post(API_ENDPOINTS.AUTH.LOGIN, formData);
+      const { accessToken, refreshToken, user } = response.data;
+      login(user, accessToken, refreshToken);
     } catch (error) {
       setError(error.response?.data?.error || 'Login failed');
     } finally {
@@ -92,6 +95,20 @@ const Login = () => {
                   className="login-input"
                 />
               </div>
+            </div>
+
+            <div className="form-group">
+              <label className="flex items-center space-x-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  id="rememberMe"
+                  name="rememberMe"
+                  checked={formData.rememberMe}
+                  onChange={handleChange}
+                  className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+                />
+                <span className="text-sm text-gray-600">Remember me for 30 days</span>
+              </label>
             </div>
 
             <button type="submit" className="login-btn" disabled={loading}>

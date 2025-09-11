@@ -19,6 +19,7 @@ import {
   TrendingUp,
   BarChart3,
   Activity,
+  RefreshCw,
 } from 'lucide-react';
 
 ChartJS.register(
@@ -31,7 +32,7 @@ ChartJS.register(
 );
 
 const DashboardPage = () => {
-  const { user } = useContext(AuthContext);
+  const { user, accessToken } = useContext(AuthContext);
   const [questions, setQuestions] = useState([]);
   const [userProgress, setUserProgress] = useState({});
   const [loading, setLoading] = useState(true);
@@ -43,16 +44,28 @@ const DashboardPage = () => {
         setLoading(true);
         const [questionsResponse, progressResponse] = await Promise.all([
           axios.get(`${API_BASE_URL}/questions`),
-          axios.get(`${API_BASE_URL}/api/progress/${user.id}`)
+          axios.get(`${API_BASE_URL}/api/users/${user.id}/progress`, {
+            headers: { Authorization: `Bearer ${accessToken}` }
+          })
         ]);
+        
+        console.log('📊 Dashboard - Questions data:', questionsResponse.data.length, 'questions');
+        console.log('📊 Dashboard - Progress data:', progressResponse.data.length, 'progress records');
         
         setQuestions(questionsResponse.data);
         
         // Convert progress array to object for easier lookup
         const progressMap = {};
         progressResponse.data.forEach(p => {
-          progressMap[p.question_id] = p.is_solved;
+          progressMap[String(p.question_id)] = p.is_solved;
+          if (p.is_solved) {
+            console.log('✅ Dashboard - Question', p.question_id, 'is solved');
+          }
         });
+        
+        console.log('📈 Dashboard - Progress map:', progressMap);
+        console.log('🎯 Dashboard - Solved count:', Object.values(progressMap).filter(Boolean).length);
+        
         setUserProgress(progressMap);
         
       } catch (error) {
@@ -62,14 +75,49 @@ const DashboardPage = () => {
       }
     };
 
-    if (user) {
+    if (user && accessToken) {
       fetchData();
     }
-  }, [user]);
+  }, [user, accessToken]);
 
-
-
-
+  // Function to refresh data manually
+  const refreshData = async () => {
+    if (!user || !accessToken) return;
+    
+    try {
+      setLoading(true);
+      const [questionsResponse, progressResponse] = await Promise.all([
+        axios.get(`${API_BASE_URL}/questions`),
+        axios.get(`${API_BASE_URL}/api/users/${user.id}/progress`, {
+          headers: { Authorization: `Bearer ${accessToken}` }
+        })
+      ]);
+      
+      console.log('🔄 Dashboard Refresh - Questions data:', questionsResponse.data.length, 'questions');
+      console.log('🔄 Dashboard Refresh - Progress data:', progressResponse.data.length, 'progress records');
+      
+      setQuestions(questionsResponse.data);
+      
+      // Convert progress array to object for easier lookup
+      const progressMap = {};
+      progressResponse.data.forEach(p => {
+        progressMap[String(p.question_id)] = p.is_solved;
+        if (p.is_solved) {
+          console.log('✅ Dashboard Refresh - Question', p.question_id, 'is solved');
+        }
+      });
+      
+      console.log('📈 Dashboard Refresh - Progress map:', progressMap);
+      console.log('🎯 Dashboard Refresh - Solved count:', Object.values(progressMap).filter(Boolean).length);
+      
+      setUserProgress(progressMap);
+      
+    } catch (error) {
+      console.error('Error refreshing data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Calculate stats
   const getStats = () => {
@@ -85,7 +133,7 @@ const DashboardPage = () => {
     };
 
     questions.forEach(q => {
-      if (userProgress[q.id]) {
+      if (userProgress[String(q.id)]) {
         solvedByDifficulty[q.difficulty]++;
       }
     });
@@ -397,7 +445,17 @@ const DashboardPage = () => {
                 <Activity className="w-6 h-6" />
                 <span>Progress Overview</span>
               </div>
-              <div className="progress-overview-percentage">{stats.percentage}%</div>
+              <div className="flex items-center space-x-4">
+                <button
+                  onClick={refreshData}
+                  className="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors duration-200"
+                  disabled={loading}
+                >
+                  <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+                  {loading ? 'Refreshing...' : 'Refresh'}
+                </button>
+                <div className="progress-overview-percentage">{stats.percentage}%</div>
+              </div>
             </div>
             <div className="progress-overview-bar">
               <div 

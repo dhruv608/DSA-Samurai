@@ -51,7 +51,8 @@ const BookmarksPage = () => {
       });
       const progressMap = {};
       response.data.forEach(progress => {
-        progressMap[progress.question_id] = progress;
+        // Map by question_id which is the actual foreign key to questions table
+        progressMap[String(progress.question_id)] = progress;
       });
       setUserProgress(progressMap);
     } catch (error) {
@@ -59,43 +60,33 @@ const BookmarksPage = () => {
     }
   }, [user, accessToken]);
 
-  // Toggle solved status
-  const toggleSolved = async (questionId) => {
-    if (!user || !accessToken) return;
-    try {
-      const currentStatus = userProgress[questionId]?.is_solved || false;
-      await axios.post(`${API_BASE_URL}/api/progress`, {
-        userId: user.id,
-        questionId: questionId,
-        isSolved: !currentStatus
-      }, {
-        headers: { Authorization: `Bearer ${accessToken}` }
-      });
-
-      // Update local state
-      setUserProgress(prev => ({
-        ...prev,
-        [questionId]: {
-          ...prev[questionId],
-          question_id: questionId,
-          is_solved: !currentStatus,
-          solved_at: !currentStatus ? new Date().toISOString() : null
-        }
-      }));
-    } catch (error) {
-      console.error('Error updating progress:', error);
-    }
-  };
+  // Note: Manual toggle removed - progress is now tracked via API sync only
 
   // Toggle bookmark
-  const toggleBookmark = async (questionId) => {
-    if (!user || !accessToken) return;
+  const toggleBookmark = (questionId) => {
+    if (!user?.id) return;
     
     try {
-      await axios.post(`${API_BASE_URL}/api/users/${user.id}/bookmarks/${questionId}`, {}, {
-        headers: { Authorization: `Bearer ${accessToken}` }
-      });
-      fetchUserProgress();
+      console.log('🔖 BookmarksPage - Toggling bookmark for question:', questionId);
+      
+      const currentBookmarks = { ...bookmarkedQuestions };
+      const isCurrentlyBookmarked = currentBookmarks[questionId];
+      
+      // Toggle bookmark state
+      if (isCurrentlyBookmarked) {
+        delete currentBookmarks[questionId];
+      } else {
+        currentBookmarks[questionId] = true;
+      }
+      
+      // Save to localStorage
+      localStorage.setItem(`bookmarks_${user.id}`, JSON.stringify(currentBookmarks));
+      
+      // Update state
+      setBookmarkedQuestions(currentBookmarks);
+      
+      console.log('🔖 BookmarksPage - Bookmark toggled successfully');
+      
     } catch (error) {
       console.error('Error toggling bookmark:', error);
     }
@@ -104,12 +95,16 @@ const BookmarksPage = () => {
   useEffect(() => {
     const fetchAllData = async () => {
       if (user && accessToken) {
+        // Initialize bookmarks from localStorage
+        const storedBookmarks = getBookmarkedQuestions();
+        setBookmarkedQuestions(storedBookmarks);
+        
         await fetchQuestions();
         await fetchUserProgress();
       }
     };
     fetchAllData();
-  }, [user, accessToken]);
+  }, [user, accessToken, getBookmarkedQuestions]);
 
   // Filter only bookmarked questions
   const bookmarkedQuestionsList = questions.filter(question => 
@@ -161,7 +156,7 @@ const BookmarksPage = () => {
                 </span>
               </div>
               <div className="text-sm text-blue-600 dark:text-blue-400">
-                {bookmarkedQuestionsList.filter(q => userProgress[q.id]?.is_solved).length} solved
+                {bookmarkedQuestionsList.filter(q => userProgress[String(q.id)]?.is_solved).length} solved
               </div>
             </div>
           </div>
@@ -171,8 +166,7 @@ const BookmarksPage = () => {
               <QuestionCard
                 key={question.id}
                 question={question}
-                isSolved={userProgress[question.id]?.is_solved || false}
-                onToggleSolved={() => toggleSolved(question.id)}
+                isSolved={userProgress[String(question.id)]?.is_solved || false}
                 isBookmarked={bookmarkedQuestions[question.id] || false}
                 onToggleBookmark={() => toggleBookmark(question.id)}
               />

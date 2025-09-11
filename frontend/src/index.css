@@ -1226,3 +1226,29 @@ code {
 .animate-pulse-slow {
   animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
+
+/* Platform Badges */
+.platform-badge {
+  @apply px-2 py-1 text-xs font-semibold rounded-full;
+  @apply border shadow-sm;
+}
+
+.platform-badge.gfg {
+  @apply bg-green-100 text-green-800 border-green-200;
+  @apply dark:bg-green-800 dark:text-green-100 dark:border-green-700;
+}
+
+.platform-badge.leetcode {
+  @apply bg-orange-100 text-orange-800 border-orange-200;
+  @apply dark:bg-orange-800 dark:text-orange-100 dark:border-orange-700;
+}
+
+.platform-badge.interviewbit {
+  @apply bg-blue-100 text-blue-800 border-blue-200;
+  @apply dark:bg-blue-800 dark:text-blue-100 dark:border-blue-700;
+}
+
+.platform-badge.other {
+  @apply bg-gray-100 text-gray-800 border-gray-200;
+  @apply dark:bg-gray-800 dark:text-gray-100 dark:border-gray-700;
+}

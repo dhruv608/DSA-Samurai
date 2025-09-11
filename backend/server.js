@@ -23,21 +23,29 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// Rate limiting middleware
+// Rate limiting middleware - Relaxed for development
 const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // Limit each IP to 100 requests per windowMs
+    windowMs: 1 * 60 * 1000, // 1 minute
+    max: 1000, // Much higher limit for development
     message: 'Too many requests from this IP, please try again later.',
     standardHeaders: true,
-    legacyHeaders: false
+    legacyHeaders: false,
+    skip: (req) => {
+        // Skip rate limiting for development if NODE_ENV is not production
+        return process.env.NODE_ENV !== 'production';
+    }
 });
 app.use(limiter);
 
-// Stricter rate limiting for auth endpoints
+// Stricter rate limiting for auth endpoints - Also relaxed for development
 const authLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 10, // Limit auth attempts
-    message: 'Too many login attempts, please try again later.'
+    windowMs: 5 * 60 * 1000, // 5 minutes
+    max: 50, // Higher limit for development
+    message: 'Too many login attempts, please try again later.',
+    skip: (req) => {
+        // Skip rate limiting for development if NODE_ENV is not production
+        return process.env.NODE_ENV !== 'production';
+    }
 });
 app.use('/api/auth', authLimiter);
 
@@ -314,17 +322,7 @@ app.delete('/questions/:id', async (req, res) => {
     }
 });
 
-// Start server
-app.listen(PORT, () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-});
-
-// Handle graceful shutdown
-process.on('SIGINT', async () => {
-    console.log('\nShutting down server...');
-    console.log('✅ Server shut down gracefully');
-    process.exit(0);
-});
+// Server startup moved to the end of the file for proper initialization
 
 // *******************************************************************
 //                        AUTHENTICATION ROUTES                       
@@ -518,6 +516,45 @@ app.get('/api/progress/:userId', async (req, res) => {
     }
 });
 
+// Middleware to verify JWT token
+const verifyToken = (req, res, next) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader) {
+        return res.status(401).json({ error: 'No authorization header' });
+    }
+    
+    try {
+        const token = authHeader.split(' ')[1];
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        req.user = decoded;
+        next();
+    } catch (err) {
+        return res.status(401).json({ error: 'Invalid token' });
+    }
+};
+
+// Get user progress for a specific user (alternative endpoint format)
+app.get('/api/users/:userId/progress', verifyToken, async (req, res) => {
+    const { userId } = req.params;
+
+    try {
+        const { data, error } = await supabase
+            .from('user_progress')
+            .select('question_id, is_solved, solved_at')
+            .eq('user_id', userId);
+        
+        if (error) {
+            console.error('Error fetching user progress:', error.message);
+            return res.status(500).json({ error: 'Failed to fetch progress' });
+        }
+        
+        res.json(data);
+    } catch (err) {
+        console.error('Error fetching user progress:', err.message);
+        res.status(500).json({ error: 'Failed to fetch progress' });
+    }
+});
+
 // Alternative route for backward compatibility
 app.get('/user-progress', async (req, res) => {
     // This route requires authentication - extract userId from token
@@ -592,6 +629,42 @@ app.get('/api/debug/questions', async (req, res) => {
         });
     } catch (err) {
         res.status(500).json({ error: err.message });
+    }
+});
+
+// Debug endpoint to check bookmark table
+app.get('/api/debug/bookmarks/:userId', async (req, res) => {
+    const { userId } = req.params;
+    
+    try {
+        // Check if bookmarks table exists and get sample data
+        const { data: bookmarks, error: bookmarksError } = await supabase
+            .from('user_bookmarks')
+            .select('*')
+            .eq('user_id', userId)
+            .limit(10);
+
+        const { data: allBookmarks, error: allError } = await supabase
+            .from('user_bookmarks')
+            .select('*')
+            .limit(5);
+
+        res.json({
+            table_exists: !bookmarksError,
+            user_bookmarks: bookmarks || [],
+            user_bookmark_count: bookmarks ? bookmarks.length : 0,
+            sample_bookmarks: allBookmarks || [],
+            errors: {
+                bookmarks_error: bookmarksError?.message,
+                all_error: allError?.message
+            }
+        });
+    } catch (err) {
+        res.status(500).json({ 
+            error: err.message,
+            table_exists: false,
+            message: 'user_bookmarks table might not exist'
+        });
     }
 });
 
@@ -678,7 +751,7 @@ app.get('/api/debug/leetcode-api/:username', async (req, res) => {
 });
 
 // Fetch and update GFG user progress
-app.get('/api/sync-gfg-progress/:userId', async (req, res) => {
+app.get('/api/sync-gfg-progress/:userId', verifyToken, async (req, res) => {
     const userId = req.params.userId;
 
     try {
@@ -833,7 +906,7 @@ app.get('/api/sync-gfg-progress/:userId', async (req, res) => {
 });
 
 // Fetch and update LeetCode user progress
-app.get('/api/sync-leetcode-progress/:userId', async (req, res) => {
+app.get('/api/sync-leetcode-progress/:userId', verifyToken, async (req, res) => {
     const userId = req.params.userId;
     const maxRetries = 3;
     const retryDelay = 2000; // 2 seconds
@@ -1139,25 +1212,40 @@ app.get('/api/sync-leetcode-progress/:userId', async (req, res) => {
 });
 
 // Sync both GFG and LeetCode progress
-app.get('/api/sync-all-progress/:userId', async (req, res) => {
+app.get('/api/sync-all-progress/:userId', verifyToken, async (req, res) => {
     const userId = req.params.userId;
     const results = { gfg: null, leetcode: null };
 
     try {
+        // Get authorization header from the request
+        const authHeader = req.headers.authorization;
+        
         // Sync GFG progress
         try {
-            const gfgResponse = await fetch(`http://localhost:${process.env.PORT || 3001}/api/sync-gfg-progress/${userId}`);
+            const gfgResponse = await fetch(`http://localhost:${process.env.PORT || 3001}/api/sync-gfg-progress/${userId}`, {
+                headers: {
+                    'Authorization': authHeader,
+                    'Content-Type': 'application/json'
+                }
+            });
             results.gfg = await gfgResponse.json();
         } catch (gfgError) {
-            results.gfg = { error: 'Failed to sync GFG progress' };
+            console.error('GFG sync error:', gfgError.message);
+            results.gfg = { error: 'Failed to sync GFG progress', details: gfgError.message };
         }
 
         // Sync LeetCode progress
         try {
-            const leetcodeResponse = await fetch(`http://localhost:${process.env.PORT || 3001}/api/sync-leetcode-progress/${userId}`);
+            const leetcodeResponse = await fetch(`http://localhost:${process.env.PORT || 3001}/api/sync-leetcode-progress/${userId}`, {
+                headers: {
+                    'Authorization': authHeader,
+                    'Content-Type': 'application/json'
+                }
+            });
             results.leetcode = await leetcodeResponse.json();
         } catch (leetcodeError) {
-            results.leetcode = { error: 'Failed to sync LeetCode progress' };
+            console.error('LeetCode sync error:', leetcodeError.message);
+            results.leetcode = { error: 'Failed to sync LeetCode progress', details: leetcodeError.message };
         }
 
         res.json({
@@ -1196,6 +1284,39 @@ app.post('/api/progress', async (req, res) => {
         }
         
         res.json({ success: true, message: 'Progress updated' });
+
+    } catch (err) {
+        console.error('Error updating user progress:', err.message);
+        res.status(500).json({ error: 'Failed to update progress' });
+    }
+});
+
+// Update user progress for specific user (alternative endpoint)
+app.post('/api/users/:userId/progress', verifyToken, async (req, res) => {
+    const { userId } = req.params;
+    const { questionId, isSolved } = req.body;
+
+    try {
+        const now = new Date().toISOString();
+        
+        const { data, error } = await supabase
+            .from('user_progress')
+            .upsert({
+                user_id: userId,
+                question_id: questionId,
+                is_solved: isSolved,
+                solved_at: isSolved ? now : null
+            }, {
+                onConflict: 'user_id,question_id'
+            })
+            .select();
+        
+        if (error) {
+            console.error('Error updating user progress:', error.message);
+            return res.status(500).json({ error: 'Failed to update progress' });
+        }
+        
+        res.json({ success: true, message: 'Progress updated', data });
 
     } catch (err) {
         console.error('Error updating user progress:', err.message);
@@ -1260,6 +1381,105 @@ app.post('/api/users', async (req, res) => {
     } catch (err) {
         console.error('Error adding user:', err.message);
         res.status(500).json({ error: 'Failed to add user' });
+    }
+});
+
+// *******************************************************************
+//                        BOOKMARK ROUTES                           
+// *******************************************************************
+
+// Get user bookmarks
+app.get('/api/users/:userId/bookmarks', verifyToken, async (req, res) => {
+    const { userId } = req.params;
+
+    try {
+        const { data, error } = await supabase
+            .from('user_bookmarks')
+            .select('question_id')
+            .eq('user_id', userId);
+        
+        if (error) {
+            console.error('Error fetching bookmarks:', error.message);
+            
+            // If table doesn't exist, return empty bookmarks
+            if (error.message.includes('relation "user_bookmarks" does not exist')) {
+                console.log('⚠️ user_bookmarks table does not exist, returning empty bookmarks');
+                return res.json({});
+            }
+            
+            return res.status(500).json({ error: 'Failed to fetch bookmarks', details: error.message });
+        }
+        
+        // Convert array to object for easier lookup
+        const bookmarkMap = {};
+        data.forEach(bookmark => {
+            bookmarkMap[bookmark.question_id] = true;
+        });
+        
+        res.json(bookmarkMap);
+    } catch (err) {
+        console.error('Error fetching bookmarks:', err.message);
+        res.status(500).json({ error: 'Failed to fetch bookmarks' });
+    }
+});
+
+// Toggle bookmark (add/remove)
+app.post('/api/users/:userId/bookmarks/:questionId', verifyToken, async (req, res) => {
+    const { userId, questionId } = req.params;
+
+    try {
+        // Check if bookmark already exists
+        const { data: existingBookmark, error: checkError } = await supabase
+            .from('user_bookmarks')
+            .select('*')
+            .eq('user_id', userId)
+            .eq('question_id', questionId)
+            .single();
+
+        if (existingBookmark) {
+            // Remove bookmark
+            const { error: deleteError } = await supabase
+                .from('user_bookmarks')
+                .delete()
+                .eq('user_id', userId)
+                .eq('question_id', questionId);
+
+            if (deleteError) {
+                console.error('Error removing bookmark:', deleteError.message);
+                return res.status(500).json({ error: 'Failed to remove bookmark' });
+            }
+
+            res.json({ success: true, action: 'removed', message: 'Bookmark removed' });
+        } else {
+            // Add bookmark
+            const { error: insertError } = await supabase
+                .from('user_bookmarks')
+                .insert({
+                    user_id: userId,
+                    question_id: questionId,
+                    bookmarked_at: new Date().toISOString()
+                });
+
+            if (insertError) {
+                console.error('Error adding bookmark:', insertError.message);
+                
+                // If table doesn't exist, provide helpful message
+                if (insertError.message.includes('relation "user_bookmarks" does not exist')) {
+                    return res.status(500).json({ 
+                        error: 'Bookmarks table not found', 
+                        message: 'Please create the user_bookmarks table in Supabase first',
+                        sql_needed: true
+                    });
+                }
+                
+                return res.status(500).json({ error: 'Failed to add bookmark', details: insertError.message });
+            }
+
+            res.json({ success: true, action: 'added', message: 'Bookmark added' });
+        }
+    } catch (err) {
+        console.error('Error toggling bookmark:', err.message);
+        res.status(500).json({ error: 'Failed to toggle bookmark' });
     }
 });
 
@@ -1516,3 +1736,53 @@ app.get('/api/leaderboard', async (req, res) => {
         res.status(500).json({ error: 'Failed to fetch leaderboard' });
     }
 });
+
+// *******************************************************************
+//                        SERVER STARTUP                           
+// *******************************************************************
+
+const server = app.listen(PORT, () => {
+    console.log(`Server running on http://localhost:${PORT}`);
+});
+
+// Graceful shutdown handling
+process.on('SIGINT', () => {
+    console.log('\n\nReceived SIGINT, shutting down gracefully...');
+    server.close(() => {
+        console.log('✅ Server shut down gracefully');
+        process.exit(0);
+    });
+});
+
+process.on('SIGTERM', () => {
+    console.log('\n\nReceived SIGTERM, shutting down gracefully...');
+    server.close(() => {
+        console.log('✅ Server shut down gracefully');
+        process.exit(0);
+    });
+});
+
+// Keep the process alive and handle unhandled rejections
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+    // Don't exit the process for unhandled promise rejections in development
+    if (process.env.NODE_ENV === 'production') {
+        server.close(() => {
+            process.exit(1);
+        });
+    }
+});
+
+process.on('uncaughtException', (error) => {
+    console.error('Uncaught Exception:', error);
+    // Always exit on uncaught exceptions
+    server.close(() => {
+        process.exit(1);
+    });
+});
+
+console.log('🚀 DSA Samurai Backend Server Started');
+console.log('📝 Rate limiting is relaxed for development');
+console.log('🔒 JWT Authentication enabled');
+console.log('📊 Supabase database connected');
+console.log('\n--- Server is ready to handle requests ---');

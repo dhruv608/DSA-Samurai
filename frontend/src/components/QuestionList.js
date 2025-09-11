@@ -1,5 +1,17 @@
 import React from 'react';
 
+// Helper function to identify platform based on URL
+const identifyPlatform = (url) => {
+  if (url.includes('geeksforgeeks.org') || url.includes('practice.geeksforgeeks.org')) {
+    return 'GeeksforGeeks';
+  } else if (url.includes('leetcode.com')) {
+    return 'LeetCode';
+  } else if (url.includes('interviewbit.com')) {
+    return 'InterviewBit';
+  }
+  return 'Other';
+};
+
 const QuestionList = ({ questions, loading, onEdit, onDelete }) => {
   if (loading) {
     return <div className="loading-message">Loading questions...</div>;
@@ -19,6 +31,7 @@ const QuestionList = ({ questions, loading, onEdit, onDelete }) => {
             <th>Link</th>
             <th>Type</th>
             <th>Difficulty</th>
+            <th>Platform</th>
             <th>Actions</th>
           </tr>
         </thead>
@@ -33,6 +46,15 @@ const QuestionList = ({ questions, loading, onEdit, onDelete }) => {
               </td>
               <td className={`type-${q.type}`}>{q.type}</td>
               <td className={`difficulty-${q.difficulty}`}>{q.difficulty}</td>
+              <td className="platform-cell">
+                <span className={`platform-badge ${
+                  identifyPlatform(q.question_link) === 'GeeksforGeeks' ? 'gfg' :
+                  identifyPlatform(q.question_link) === 'LeetCode' ? 'leetcode' :
+                  identifyPlatform(q.question_link) === 'InterviewBit' ? 'interviewbit' : 'other'
+                }`}>
+                  {identifyPlatform(q.question_link)}
+                </span>
+              </td>
               <td>
                 <button 
                   className="edit-btn" 

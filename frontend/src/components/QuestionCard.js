@@ -15,9 +15,12 @@ const identifyPlatform = (url) => {
   return 'unknown';
 };
 
-const QuestionCard = ({ question, isSolved, onToggleSolved, isBookmarked, onToggleBookmark }) => {
+const QuestionCard = ({ question, isSolved, isBookmarked, onToggleBookmark }) => {
   const { user } = useContext(AuthContext);
   const platform = identifyPlatform(question.question_link);
+  
+  // Debug logging
+  console.log(`🎯 QuestionCard for "${question.question_name}" - isSolved: ${isSolved}, platform: ${platform}`);
 
   return (
     <div 
@@ -78,49 +81,26 @@ const QuestionCard = ({ question, isSolved, onToggleSolved, isBookmarked, onTogg
           </button>
         )}
         
-        {/* Mark solved button or auto-detection indicator */}
+        {/* API-based solved status indicator */}
         {user && (
-          platform === 'gfg' ? (
-            /* Auto-detection indicator for GFG questions */
-            <div className={`px-4 py-2 text-sm rounded flex items-center ${
-              isSolved 
-                ? 'bg-green-100 text-green-800 border border-green-300'
-                : 'bg-red-100 text-gray-600 border border-gray-300'
-            }`}>
-              {isSolved ? (
-                <>
-                  <CheckIconSolid className="inline-block w-4 h-4 mr-1 text-green-600" />
-                  Auto-Detected
-                </>
-              ) : (
-                <>
-                  Not Solved
-                </>
-              )}
-            </div>
-          ) : (
-            /* Manual mark button for non-GFG questions */
-            <button 
-              onClick={onToggleSolved}
-              className={`px-4 py-2 text-white text-sm rounded transition-colors duration-200 ${
-                isSolved 
-                  ? 'bg-red-500 hover:bg-red-600' 
-                  : 'bg-green-500 hover:bg-green-600'
-              }`}
-            >
-              {isSolved ? (
-                <>
-                  <CheckIconSolid className="inline-block w-4 h-4 mr-1" />
-                  Solved
-                </>
-              ) : (
-                <>
-                  <CheckIcon className="inline-block w-4 h-4 mr-1" />
-                  Solved
-                </>
-              )}
-            </button>
-          )
+          <div className={`px-4 py-2 text-sm rounded flex items-center ${
+            isSolved 
+              ? 'bg-green-100 text-green-800 border border-green-300'
+              : 'bg-gray-100 text-gray-600 border border-gray-300'
+          }`}>
+            {isSolved ? (
+              <>
+                <CheckIconSolid className="inline-block w-4 h-4 mr-1 text-green-600" />
+                <span className="font-medium">Solved</span>
+                {platform === 'gfg' && <span className="ml-1 text-xs">(GFG API)</span>}
+                {platform === 'leetcode' && <span className="ml-1 text-xs">(LC API)</span>}
+              </>
+            ) : (
+              <>
+                <span className="text-gray-500 font-medium">Not Solved</span>
+              </>
+            )}
+          </div>
         )}
       </div>
     </div>

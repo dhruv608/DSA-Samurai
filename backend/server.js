@@ -959,13 +959,9 @@ app.get('/api/sync-leetcode-progress/:userId', verifyToken, async (req, res) => 
                     
                     const data = await response.json();
                     
-                    // DETAILED LOGGING FOR DEBUGGING
-                    console.log('\n=== RAW API RESPONSE DEBUG ===');
-                    console.log(`API URL: ${apiUrl}`);
-                    console.log('Full Response Structure:');
-                    console.log(JSON.stringify(data, null, 2));
-                    console.log('Response Keys:', Object.keys(data));
-                    console.log('================================\n');
+        // Basic API response logging
+        console.log(`✅ API Response received from: ${apiUrl}`);
+        console.log(`📊 Keys available: ${Object.keys(data).slice(0, 5).join(', ')}...`);
                     
                     // Check if data is valid
                     if (data && !data.errors && !data.error) {
@@ -1138,18 +1134,12 @@ app.get('/api/sync-leetcode-progress/:userId', verifyToken, async (req, res) => 
             const dbSlug = extractLeetCodeSlug(q.question_link);
             const dbTitleNormalized = normalizeTitle(q.question_name);
             
-            console.log(`\n🔍 Checking question: ${q.question_name}`);
-            console.log(`DB Slug: ${dbSlug}`);
-            console.log(`DB Title Normalized: ${dbTitleNormalized}`);
-            
-            // Try to match by slug or normalized title
+            // Try to match by slug or normalized title (reduced logging)
             const isMatched = solvedQuestions.some(solvedItem => {
                 const solvedTitle = typeof solvedItem === 'string' ? solvedItem : 
                                   (solvedItem.title || solvedItem.titleSlug || solvedItem.name || '');
                 const solvedTitleNormalized = normalizeTitle(solvedTitle);
                 const solvedSlug = typeof solvedItem === 'object' ? solvedItem.titleSlug : null;
-                
-                console.log(`  Comparing with: ${solvedTitle} (normalized: ${solvedTitleNormalized})`);
                 
                 const slugMatch = dbSlug && solvedSlug && dbSlug === solvedSlug;
                 const slugInTitle = dbSlug && solvedTitleNormalized.includes(dbSlug);
@@ -1158,7 +1148,7 @@ app.get('/api/sync-leetcode-progress/:userId', verifyToken, async (req, res) => 
                 const partialMatch2 = dbTitleNormalized.includes(solvedTitleNormalized);
                 
                 if (slugMatch || slugInTitle || exactTitleMatch || partialMatch1 || partialMatch2) {
-                    console.log(`  ✅ MATCHED! (slug: ${slugMatch}, slugInTitle: ${slugInTitle}, exact: ${exactTitleMatch}, partial: ${partialMatch1 || partialMatch2})`);
+                    console.log(`  ✅ MATCHED: ${q.question_name} <-> ${solvedTitle}`);
                     return true;
                 }
                 return false;
@@ -1544,6 +1534,39 @@ app.put('/api/users/:id', async (req, res) => {
 // *******************************************************************
 //                        LEADERBOARD ROUTES                        
 // *******************************************************************
+
+// Simple sync endpoint for testing (original kept below)
+app.post('/api/sync-test', async (req, res) => {
+    try {
+        // Get count of users
+        const { data: users, error: usersError } = await supabase
+            .from('users')
+            .select('id, username, leetcode_username, geeksforgeeks_username')
+            .eq('role', 'user');
+
+        if (usersError) {
+            return res.status(500).json({ error: 'Failed to fetch users', details: usersError.message });
+        }
+
+        const usersWithUsernames = users.filter(u => u.leetcode_username || u.geeksforgeeks_username);
+        
+        res.json({
+            success: true,
+            message: 'Sync test completed successfully',
+            stats: {
+                total_users: users.length,
+                users_with_platforms: usersWithUsernames.length,
+                platform_breakdown: {
+                    leetcode: users.filter(u => u.leetcode_username).length,
+                    geeksforgeeks: users.filter(u => u.geeksforgeeks_username).length
+                }
+            }
+        });
+    } catch (err) {
+        console.error('Error in sync test:', err.message);
+        res.status(500).json({ error: 'Sync test failed', details: err.message });
+    }
+});
 
 // Sync all users progress automatically
 app.post('/api/sync-all-users-progress', async (req, res) => {

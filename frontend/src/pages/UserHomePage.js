@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useContext, useCallback } from 'react';
 import axios from 'axios';
-import { 
-  MagnifyingGlassIcon, 
+import {
+  MagnifyingGlassIcon,
   RocketLaunchIcon,
   Square3Stack3DIcon,
   LinkIcon,
   BoltIcon
 } from '@heroicons/react/24/outline';
-import { 
+import {
   TreePineIcon,
   BarChart3Icon,
   GitBranchIcon
@@ -35,11 +35,12 @@ const UserHomePage = () => {
   // Fetch all questions
   const fetchQuestions = useCallback(async () => {
     if (!user || !accessToken) return;
-    
+
     try {
       const response = await axios.get(API_ENDPOINTS.QUESTIONS, {
         headers: { Authorization: `Bearer ${accessToken}` }
       });
+      console.log('Raw user progress API data:', response.data);
       setQuestions(response.data);
       setFilteredQuestions(response.data);
     } catch (error) {
@@ -52,25 +53,33 @@ const UserHomePage = () => {
   // Fetch user progress
   const fetchUserProgress = useCallback(async () => {
     if (!user || !accessToken) return;
-    
+
     try {
       const response = await axios.get(`${API_BASE_URL}/api/users/${user.id}/progress`, {
         headers: { Authorization: `Bearer ${accessToken}` }
       });
+
+      console.log("Raw user progress API data:", response.data);
+
       const progressMap = {};
       response.data.forEach(progress => {
-        progressMap[progress.question_id] = progress;
+        progressMap[String(progress.id)] = progress; // Use 'id', not 'question_id'
       });
+
+      console.log("progressMap created:", progressMap);
+
       setUserProgress(progressMap);
+
     } catch (error) {
       console.error('Error fetching user progress:', error);
     }
   }, [user, accessToken]);
 
+
   // Get bookmarked questions from local storage
   const getBookmarkedQuestions = useCallback(async () => {
     if (!user || !accessToken) return;
-    
+
     try {
       const response = await axios.get(`${API_BASE_URL}/api/users/${user.id}/bookmarks`, {
         headers: { Authorization: `Bearer ${accessToken}` }
@@ -84,7 +93,7 @@ const UserHomePage = () => {
   // Toggle solved status
   const toggleSolved = async (questionId) => {
     if (!user || !accessToken) return;
-    
+
     try {
       const currentStatus = userProgress[questionId]?.is_solved || false;
       await axios.post(`${API_BASE_URL}/api/users/${user.id}/progress`, {
@@ -112,18 +121,18 @@ const UserHomePage = () => {
   // Refresh solved status from GFG API
   const refreshGFGStatus = async () => {
     if (!user || !accessToken) return;
-    
+
     try {
       setLoading(true);
-      
+
       // Sync progress with GeeksforGeeks API using user ID
       const response = await axios.get(`${API_BASE_URL}/api/sync-gfg-progress/${user.id}`, {
         headers: { Authorization: `Bearer ${accessToken}` }
       });
-      
+
       // Refresh user progress
       await fetchUserProgress();
-      
+
       const stats = response.data.stats;
       alert(`GFG Progress synchronized!\n\nFound ${stats.totalGFGQuestions} GFG questions in database\nSolved ${stats.solvedQuestions} questions\nUpdated ${stats.updatedQuestions} records`);
     } catch (error) {
@@ -141,18 +150,18 @@ const UserHomePage = () => {
   // Refresh solved status from LeetCode API
   const refreshLeetCodeStatus = async () => {
     if (!user || !accessToken) return;
-    
+
     try {
       setLoading(true);
-      
+
       // Sync progress with LeetCode API using user ID
       const response = await axios.get(`${API_BASE_URL}/api/sync-leetcode-progress/${user.id}`, {
         headers: { Authorization: `Bearer ${accessToken}` }
       });
-      
+
       // Refresh user progress
       await fetchUserProgress();
-      
+
       const stats = response.data.stats;
       alert(`LeetCode Progress synchronized!\n\nFound ${stats.totalLeetCodeQuestions} LeetCode questions in database\nSolved ${stats.solvedQuestions} questions\nUpdated ${stats.updatedQuestions} records`);
     } catch (error) {
@@ -170,35 +179,35 @@ const UserHomePage = () => {
   // Refresh solved status from both GFG and LeetCode APIs
   const refreshAllStatus = async () => {
     if (!user || !accessToken) return;
-    
+
     try {
       setLoading(true);
-      
+
       // Sync progress with both platforms
       const response = await axios.get(`${API_BASE_URL}/api/sync-all-progress/${user.id}`, {
         headers: { Authorization: `Bearer ${accessToken}` }
       });
-      
+
       // Refresh user progress
       await fetchUserProgress();
-      
+
       const results = response.data.results;
       let message = 'Progress synchronized for all platforms!\n\n';
-      
+
       if (results.gfg && results.gfg.success) {
         const gfgStats = results.gfg.stats;
         message += `GFG: Updated ${gfgStats.updatedQuestions} out of ${gfgStats.totalGFGQuestions} questions\n`;
       } else {
         message += `GFG: ${results.gfg?.error || 'Failed to sync'}\n`;
       }
-      
+
       if (results.leetcode && results.leetcode.success) {
         const lcStats = results.leetcode.stats;
         message += `LeetCode: Updated ${lcStats.updatedQuestions} out of ${lcStats.totalLeetCodeQuestions} questions\n`;
       } else {
         message += `LeetCode: ${results.leetcode?.error || 'Failed to sync'}\n`;
       }
-      
+
       alert(message);
     } catch (error) {
       console.error('Error refreshing all status:', error);
@@ -251,12 +260,12 @@ const UserHomePage = () => {
     });
 
     filtered = getDateFilteredQuestions(filtered);
-    
+
     // Sort questions based on sortFilter
     filtered = filtered.sort((a, b) => {
       const dateA = new Date(a.created_at);
       const dateB = new Date(b.created_at);
-      
+
       if (sortFilter === 'latest') {
         return dateB - dateA; // Newest first (descending)
       } else if (sortFilter === 'oldest') {
@@ -264,7 +273,7 @@ const UserHomePage = () => {
       }
       return 0;
     });
-    
+
     setFilteredQuestions(filtered);
   }, [questions, searchTerm, activeFilter, difficultyFilter, solvedFilter, dateFilter, sortFilter, userProgress, getDateFilteredQuestions]);
 
@@ -303,7 +312,7 @@ const UserHomePage = () => {
 
   const toggleBookmark = async (questionId) => {
     if (!user || !accessToken) return;
-    
+
     try {
       await axios.post(`${API_BASE_URL}/api/users/${user.id}/bookmarks/${questionId}`, {}, {
         headers: { Authorization: `Bearer ${accessToken}` }
@@ -490,11 +499,11 @@ const UserHomePage = () => {
                     </svg>
                     <span>{loading ? 'Syncing...' : 'Sync LC'}</span>
                   </button> */}
-                  
-                  <button 
+
+                  <button
                     onClick={refreshAllStatus}
                     disabled={loading}
-                    className="px-3 py-2 bg-grey-600 hover:bg-green-700 disabled:bg-gray-400 text-white text-sm rounded-lg transition-colors duration-200 flex items-center space-x-2"
+                    className="px-3 py-2 bg-grey-600 hover:bg--700 disabled:bg-gray-400 text-white text-sm rounded-lg transition-colors duration-200 flex items-center space-x-2"
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -524,16 +533,27 @@ const UserHomePage = () => {
             </div>
           ) : (
             <div className="flex flex-col space-y-4">
-              {paginate(filteredQuestions).map((question) => (
-                <QuestionCard
-                  key={question.id}
-                  question={question}
-                  isSolved={userProgress[question.id]?.is_solved || false}
-                  onToggleSolved={() => toggleSolved(question.id)}
-                  isBookmarked={bookmarkedQuestions[question.id] || false}
-                  onToggleBookmark={() => toggleBookmark(question.id)}
-                />
-              ))}
+              {paginate(filteredQuestions).map((question) => {
+                console.log(
+                  "Rendering question:",
+                  question.question_name,
+                  "id:", question.id,
+                  "type:", typeof question.id,
+                  "Progress for id:",
+                  userProgress[String(question.id)]
+                );
+
+                return (
+                  <QuestionCard
+                    key={question.id}
+                    question={question}
+                    isSolved={userProgress[String(question.id)]?.is_solved || false}
+                    onToggleSolved={() => toggleSolved(question.id)}
+                    isBookmarked={bookmarkedQuestions[question.id] || false}
+                    onToggleBookmark={() => toggleBookmark(question.id)}
+                  />
+                );
+              })}
             </div>
           )}
 
@@ -571,7 +591,7 @@ const UserHomePage = () => {
       <footer className="user-footer">
         <div className="footer-content">
           <p className="flex items-center justify-center">
-            &copy; 2025 DSA Samurai. Keep practicing and keep growing! 
+            &copy; 2025 DSA Samurai. Keep practicing and keep growing!
             <RocketLaunchIcon className="inline-block w-5 h-5 ml-1" />
           </p>
         </div>

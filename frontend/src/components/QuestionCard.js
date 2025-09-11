@@ -23,7 +23,7 @@ const QuestionCard = ({ question, isSolved, onToggleSolved, isBookmarked, onTogg
     <div 
       className={`w-full h-24 p-4 mb-4 flex items-center justify-between rounded-lg shadow-lg transition-all duration-300 border-2 ${
         isSolved 
-          ? 'bg-green-50 dark:bg-green-900/20 border-green-500 dark:border-green-400' 
+          ? 'bg-green-100 dark:bg-green-800 border-green-600 dark:border-green-400' 
           : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600'
       } hover:shadow-xl hover:transform hover:scale-[1.02]`}
     >
@@ -94,7 +94,6 @@ const QuestionCard = ({ question, isSolved, onToggleSolved, isBookmarked, onTogg
                 </>
               ) : (
                 <>
-                  {/* <CheckIcon className="inline-block w-4 h-4 mr-1" /> */}
                   Not Solved
                 </>
               )}
@@ -117,7 +116,7 @@ const QuestionCard = ({ question, isSolved, onToggleSolved, isBookmarked, onTogg
               ) : (
                 <>
                   <CheckIcon className="inline-block w-4 h-4 mr-1" />
-                   Solved
+                  Solved
                 </>
               )}
             </button>

@@ -308,7 +308,7 @@ const data = await fetchLeaderboardData(filter);
               className="flex items-center text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
             >
               <ArrowPathIcon className="w-4 h-4 mr-1" />
-              <span className="text-sm">Refresh</span>
+              <span className="text-sm">Refresh click</span>
             </button>
             
             <button

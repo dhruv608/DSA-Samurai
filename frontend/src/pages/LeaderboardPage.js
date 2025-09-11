@@ -279,8 +279,8 @@ const data = await fetchLeaderboardData(filter);
           {/* Stats and Last Updated */}
           <div className="flex justify-center items-center gap-6 mt-4">
             <div className="flex items-center text-gray-500 dark:text-gray-400">
-              <UserGroupIcon className="w-4 h-4 mr-1" />
-              <span className="text-sm">{leaderboardData.length} participants</span>
+              {/* <UserGroupIcon className="w-4 h-4 mr-1" /> */}
+              {/* <span className="text-sm">{leaderboardData.length} participants</span> */}
             </div>
             {lastUpdated && (
               <div className="flex items-center text-gray-500 dark:text-gray-400">

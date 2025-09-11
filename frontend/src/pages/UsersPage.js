@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useContext } from 'react';
 import axios from 'axios';
+import { AuthContext } from '../context/AuthContext';
 import {
   UsersIcon,
   UserPlusIcon,
   PencilIcon,
-  EyeIcon,
+  TrashIcon,
   MagnifyingGlassIcon,
   CheckCircleIcon,
   XCircleIcon,
@@ -16,6 +17,7 @@ import {
 const API_BASE_URL = 'http://localhost:3001';
 
 const UsersPage = () => {
+  const { accessToken } = useContext(AuthContext);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -129,19 +131,45 @@ const UsersPage = () => {
         fullName: selectedUser.full_name,
         leetcodeUsername: selectedUser.leetcode_username,
         geeksforgeeksUsername: selectedUser.geeksforgeeks_username
+      }, {
+        headers: { Authorization: `Bearer ${accessToken}` }
       });
       alert('User updated successfully!');
       setShowEditModal(false);
       setSelectedUser(null);
       fetchUsers();
     } catch (error) {
-      console.error('Failed to update user');
+      console.error('Failed to update user:', error);
+      if (error.response?.status === 401) {
+        alert('You are not authorized to update users. Please log in again.');
+      } else {
+        alert(`Failed to update user: ${error.response?.data?.error || error.message}`);
+      }
     }
   };
 
   const openEditModal = (user) => {
     setSelectedUser({ ...user });
     setShowEditModal(true);
+  };
+
+  const handleDeleteUser = async (user) => {
+    if (window.confirm(`Are you sure you want to delete user "${user.username}"? This action cannot be undone.`)) {
+      try {
+        await axios.delete(`${API_BASE_URL}/api/users/${user.id}`, {
+          headers: { Authorization: `Bearer ${accessToken}` }
+        });
+        alert('User deleted successfully!');
+        fetchUsers(); // Refresh users list
+      } catch (error) {
+        console.error('Failed to delete user:', error);
+        if (error.response?.status === 401) {
+          alert('You are not authorized to delete users. Please log in again.');
+        } else {
+          alert(`Failed to delete user: ${error.response?.data?.error || error.message}`);
+        }
+      }
+    }
   };
 
   return (
@@ -288,18 +316,18 @@ const UsersPage = () => {
                   <td className="actions-cell">
                     <div className="action-buttons">
                       <button
-                        className="btn-icon-small btn-view"
-                        onClick={() => alert(`Viewing progress for ${user.username}`)}
-                        title="View Progress"
-                      >
-                        <EyeIcon className="icon-sm" />
-                      </button>
-                      <button
                         className="btn-icon-small btn-edit"
                         onClick={() => openEditModal(user)}
                         title="Edit User"
                       >
                         <PencilIcon className="icon-sm" />
+                      </button>
+                      <button
+                        className="btn-icon-small btn-delete"
+                        onClick={() => handleDeleteUser(user)}
+                        title="Delete User"
+                      >
+                        <TrashIcon className="icon-sm" />
                       </button>
                     </div>
                   </td>

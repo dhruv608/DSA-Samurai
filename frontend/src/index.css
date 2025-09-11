@@ -405,6 +405,11 @@ body.dark {
   @apply border-gray-200 dark:border-gray-600;
 }
 
+.btn-delete {
+  @apply text-red-600 hover:text-white bg-red-50 hover:bg-red-600 dark:text-red-400 dark:hover:text-white dark:bg-red-900/20 dark:hover:bg-red-600;
+  @apply border-red-200 dark:border-red-700;
+}
+
 .icon-sm {
   @apply w-4 h-4;
 }
@@ -622,8 +627,8 @@ code {
 }
 
 .hero-stats-grid {
-  @apply grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6;
-  @apply max-w-6xl mx-auto;
+  @apply grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6;
+  @apply max-w-7xl mx-auto;
 }
 
 .hero-stat-card {
@@ -652,6 +657,10 @@ code {
   @apply bg-gradient-to-br from-blue-500/10 to-indigo-500/10;
 }
 
+.hero-stat-rank::before {
+  @apply bg-gradient-to-br from-yellow-500/10 to-amber-500/10;
+}
+
 .hero-stat-total::before {
   @apply bg-gradient-to-br from-slate-500/10 to-gray-500/10;
 }
@@ -676,6 +685,10 @@ code {
 
 .hero-stat-progress .hero-stat-icon {
   @apply bg-gradient-to-br from-blue-500 to-indigo-600 text-white;
+}
+
+.hero-stat-rank .hero-stat-icon {
+  @apply bg-gradient-to-br from-yellow-500 to-amber-600 text-white;
 }
 
 .hero-stat-total .hero-stat-icon {

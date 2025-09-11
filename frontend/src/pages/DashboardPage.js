@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useCallback } from 'react';
 import axios from 'axios';
 import { AuthContext } from '../context/AuthContext';
 import { API_BASE_URL } from '../config/config';
@@ -20,6 +20,7 @@ import {
   BarChart3,
   Activity,
   RefreshCw,
+  Trophy,
 } from 'lucide-react';
 
 ChartJS.register(
@@ -35,13 +36,50 @@ const DashboardPage = () => {
   const { user, accessToken } = useContext(AuthContext);
   const [questions, setQuestions] = useState([]);
   const [userProgress, setUserProgress] = useState({});
+  const [userRank, setUserRank] = useState(null);
+  const [totalUsers, setTotalUsers] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  // Function to fetch user rank from leaderboard
+  const fetchUserRank = useCallback(async () => {
+    if (!user?.id) {
+      console.log('🏆 No user ID available for rank fetch');
+      return;
+    }
+    
+    try {
+      console.log('🏆 Fetching user rank for user ID:', user.id);
+      const leaderboardResponse = await axios.get(`${API_BASE_URL}/api/leaderboard?period=all-time`);
+      const leaderboard = leaderboardResponse.data;
+      
+      console.log('🏆 Leaderboard response:', leaderboard.length, 'users');
+      
+      // Find current user's rank
+      const currentUserEntry = leaderboard.find(entry => entry.id === user.id);
+      if (currentUserEntry) {
+        setUserRank(currentUserEntry.rank);
+        console.log(`🏆 User rank: ${currentUserEntry.rank} out of ${leaderboard.length} users`);
+      } else {
+        // User not in top 50, fetch total users count and estimate rank
+        setUserRank(null);
+        console.log('🏆 User not in top 50 leaderboard');
+      }
+      
+      setTotalUsers(leaderboard.length);
+    } catch (error) {
+      console.error('Error fetching user rank:', error);
+      setUserRank(null);
+      setTotalUsers(0);
+    }
+  }, [user?.id]);
 
   // Fetch questions and user progress
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true);
+        setError(null); // Clear any previous errors
         const [questionsResponse, progressResponse] = await Promise.all([
           axios.get(`${API_BASE_URL}/questions`),
           axios.get(`${API_BASE_URL}/api/users/${user.id}/progress`, {
@@ -56,29 +94,58 @@ const DashboardPage = () => {
         
         // Convert progress array to object for easier lookup
         const progressMap = {};
+        const solvedQuestionIds = [];
         progressResponse.data.forEach(p => {
           progressMap[String(p.question_id)] = p.is_solved;
           if (p.is_solved) {
             console.log('✅ Dashboard - Question', p.question_id, 'is solved');
+            solvedQuestionIds.push(p.question_id);
           }
         });
         
-        console.log('📈 Dashboard - Progress map:', progressMap);
+        console.log('📈 Dashboard - Progress map keys:', Object.keys(progressMap).length);
+        console.log('📈 Dashboard - Progress map sample:', Object.entries(progressMap).slice(0, 5));
+        console.log('🎯 Dashboard - Solved question IDs:', solvedQuestionIds);
         console.log('🎯 Dashboard - Solved count:', Object.values(progressMap).filter(Boolean).length);
+        
+        // Debug: Check if questions match progress records
+        const questionIds = questionsResponse.data.map(q => String(q.id));
+        const progressKeys = Object.keys(progressMap);
+        const matchingIds = questionIds.filter(id => progressKeys.includes(id));
+        console.log('🔄 Dashboard - Question IDs sample:', questionIds.slice(0, 5));
+        console.log('🔄 Dashboard - Progress keys sample:', progressKeys.slice(0, 5));
+        console.log('🔄 Dashboard - Matching IDs count:', matchingIds.length);
         
         setUserProgress(progressMap);
         
+        // Fetch user rank (don't await to prevent blocking)
+        fetchUserRank().catch(err => {
+          console.error('Error in fetchUserRank:', err);
+        });
+        
       } catch (error) {
         console.error('Error fetching data:', error);
+        setError(`Failed to load dashboard data: ${error.message}`);
       } finally {
         setLoading(false);
       }
     };
 
-    if (user && accessToken) {
+    if (user?.id && accessToken) {
       fetchData();
+    } else if (!user?.id || !accessToken) {
+      setLoading(false);
     }
-  }, [user, accessToken]);
+  }, [user?.id, accessToken]);
+
+  // Track userProgress state changes for debugging
+  useEffect(() => {
+    console.log('🔄 USER PROGRESS STATE CHANGED in Dashboard:');
+    console.log(`   - Progress records count: ${Object.keys(userProgress).length}`);
+    console.log(`   - Solved questions count (Boolean filter): ${Object.values(userProgress).filter(Boolean).length}`);
+    console.log(`   - Sample progress values:`, Object.values(userProgress).slice(0, 5));
+    console.log(`   - Sample progress entries:`, Object.entries(userProgress).slice(0, 3));
+  }, [userProgress]);
 
   // Function to refresh data manually
   const refreshData = async () => {
@@ -112,6 +179,11 @@ const DashboardPage = () => {
       
       setUserProgress(progressMap);
       
+      // Refresh user rank (don't await to prevent blocking)
+      fetchUserRank().catch(err => {
+        console.error('Error in refreshUserRank:', err);
+      });
+      
     } catch (error) {
       console.error('Error refreshing data:', error);
     } finally {
@@ -126,6 +198,13 @@ const DashboardPage = () => {
     const unsolved = total - solved;
     const percentage = total > 0 ? Math.round((solved / total) * 100) : 0;
     
+    console.log('📊 DASHBOARD STATS CALCULATION:');
+    console.log(`   - Total questions: ${total}`);
+    console.log(`   - UserProgress values:`, Object.values(userProgress).slice(0, 10));
+    console.log(`   - UserProgress solved count: ${solved}`);
+    console.log(`   - Calculated unsolved: ${unsolved}`);
+    console.log(`   - Percentage: ${percentage}%`);
+    
     const solvedByDifficulty = {
       easy: 0,
       medium: 0,
@@ -133,10 +212,17 @@ const DashboardPage = () => {
     };
 
     questions.forEach(q => {
-      if (userProgress[String(q.id)]) {
+      const progressKey = String(q.id);
+      const isSolvedForThisQuestion = userProgress[progressKey];
+      if (isSolvedForThisQuestion) {
         solvedByDifficulty[q.difficulty]++;
+        if (solvedByDifficulty.easy + solvedByDifficulty.medium + solvedByDifficulty.hard <= 3) {
+          console.log(`   ✅ Question "${q.question_name}" (${q.difficulty}) is solved`);
+        }
       }
     });
+    
+    console.log('   - Solved by difficulty:', solvedByDifficulty);
 
     return { total, solved, unsolved, percentage, solvedByDifficulty };
   };
@@ -374,13 +460,126 @@ const DashboardPage = () => {
   };
 
 
+  // Error state
+  if (error) {
+    return (
+      <div className="dashboard-page">
+        <div className="dashboard-container">
+          <div className="flex flex-col items-center justify-center min-h-[50vh] text-center">
+            <div className="text-red-500 text-6xl mb-4">⚠️</div>
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Dashboard Error</h2>
+            <p className="text-gray-600 dark:text-gray-300 mb-4 max-w-md">{error}</p>
+            <button
+              onClick={() => {
+                setError(null);
+                setLoading(true);
+                if (user?.id && accessToken) {
+                  // Retry data fetch
+                  const fetchData = async () => {
+                    try {
+                      setLoading(true);
+                      setError(null);
+                      const [questionsResponse, progressResponse] = await Promise.all([
+                        axios.get(`${API_BASE_URL}/questions`),
+                        axios.get(`${API_BASE_URL}/api/users/${user.id}/progress`, {
+                          headers: { Authorization: `Bearer ${accessToken}` }
+                        })
+                      ]);
+                      
+                      setQuestions(questionsResponse.data);
+                      
+                      const progressMap = {};
+                      progressResponse.data.forEach(p => {
+                        progressMap[String(p.question_id)] = p.is_solved;
+                      });
+                      
+                      setUserProgress(progressMap);
+                      fetchUserRank().catch(err => console.error('Error in fetchUserRank:', err));
+                    } catch (error) {
+                      console.error('Error fetching data:', error);
+                      setError(`Failed to load dashboard data: ${error.message}`);
+                    } finally {
+                      setLoading(false);
+                    }
+                  };
+                  fetchData();
+                }
+              }}
+              className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              Retry Loading
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (loading) {
     return (
-      <div className="dashboard-loading">
-        <div className="loading-spinner">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600"></div>
+      <div className="dashboard-page">
+        <div className="dashboard-container">
+          {/* Loading State with Skeleton Cards */}
+          <div className="hero-stats-section">
+            <div className="hero-stats-grid">
+              {[1, 2, 3, 4, 5].map(i => (
+                <div key={i} className="hero-stat-card animate-pulse">
+                  <div className="hero-stat-icon bg-gray-200 dark:bg-gray-700"></div>
+                  <div className="hero-stat-content">
+                    <div className="hero-stat-number bg-gray-200 dark:bg-gray-700 h-8 w-16 rounded mb-2"></div>
+                    <div className="hero-stat-label bg-gray-200 dark:bg-gray-700 h-4 w-12 rounded mb-1"></div>
+                    <div className="hero-stat-subtitle bg-gray-200 dark:bg-gray-700 h-3 w-20 rounded"></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          
+          {/* Loading Progress Section */}
+          <div className="progress-overview-section">
+            <div className="progress-overview-card animate-pulse">
+              <div className="progress-overview-header">
+                <div className="bg-gray-200 dark:bg-gray-700 h-6 w-32 rounded"></div>
+                <div className="bg-gray-200 dark:bg-gray-700 h-8 w-20 rounded"></div>
+              </div>
+              <div className="bg-gray-200 dark:bg-gray-700 h-4 w-full rounded-full"></div>
+            </div>
+          </div>
+          
+          {/* Loading Analytics Section */}
+          <div className="analytics-section">
+            <div className="analytics-header animate-pulse">
+              <div className="bg-gray-200 dark:bg-gray-700 h-8 w-48 rounded mb-2"></div>
+              <div className="bg-gray-200 dark:bg-gray-700 h-4 w-64 rounded"></div>
+            </div>
+            
+            <div className="analytics-grid">
+              {[1, 2].map(i => (
+                <div key={i} className="analytics-card animate-pulse">
+                  <div className="analytics-card-header">
+                    <div className="bg-gray-200 dark:bg-gray-700 h-6 w-32 rounded mb-2"></div>
+                    <div className="bg-gray-200 dark:bg-gray-700 h-4 w-48 rounded"></div>
+                  </div>
+                  <div className="analytics-chart">
+                    <div className="bg-gray-200 dark:bg-gray-700 h-64 w-full rounded"></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          
+          {/* Loading Message */}
+          <div className="fixed bottom-8 right-8 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 border">
+            <div className="flex items-center space-x-3">
+              <div className="flex space-x-1">
+                <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"></div>
+                <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
+                <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+              </div>
+              <span className="text-gray-700 dark:text-gray-300 font-medium">Loading dashboard...</span>
+            </div>
+          </div>
         </div>
-        <p className="loading-text">Loading your dashboard...</p>
       </div>
     );
   }
@@ -421,6 +620,21 @@ const DashboardPage = () => {
                 <div className="hero-stat-number">{stats.percentage}%</div>
                 <div className="hero-stat-label">Progress</div>
                 <div className="hero-stat-subtitle">Completion rate</div>
+              </div>
+            </div>
+            
+            <div className="hero-stat-card hero-stat-rank group">
+              <div className="hero-stat-icon">
+                <Trophy className="w-7 h-7" />
+              </div>
+              <div className="hero-stat-content">
+                <div className="hero-stat-number">
+                  {userRank ? `#${userRank}` : '--'}
+                </div>
+                <div className="hero-stat-label">Rank</div>
+                <div className="hero-stat-subtitle">
+                  {userRank ? `Out of ${totalUsers} users` : 'Not ranked yet'}
+                </div>
               </div>
             </div>
             

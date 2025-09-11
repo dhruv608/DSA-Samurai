@@ -74,8 +74,21 @@ const UserHomePage = () => {
       console.log("🗺️ progressMap created:", progressMap);
       console.log(`🎯 Total solved questions: ${Object.values(progressMap).filter(p => p.is_solved).length}`);
 
-      setUserProgress(progressMap);
-      console.log("🔄 UserProgress state updated");
+      // Use React state updater function to ensure state is properly set
+      setUserProgress(prevProgress => {
+        console.log("🔄 UserProgress state updating from:", Object.keys(prevProgress).length, "to", Object.keys(progressMap).length, "records");
+        console.log("🔄 New progress map keys:", Object.keys(progressMap));
+        return progressMap;
+      });
+      
+      console.log("🔄 UserProgress state update called");
+      
+      // Debug the filter logic after progress is loaded
+      setTimeout(() => {
+        console.log('\n🔍 FILTER LOGIC DEBUG:');
+        console.log('Progress records loaded:', Object.keys(progressMap).length);
+        console.log(`Total solved questions: ${Object.values(progressMap).filter(p => p.is_solved).length}`);
+      }, 100);
 
     } catch (error) {
       console.error('Error fetching user progress:', error);
@@ -103,6 +116,30 @@ const UserHomePage = () => {
     }
   }, [user]);
 
+  // Debug function to analyze filter logic
+  const debugFilterLogic = useCallback(() => {
+    console.log('\n🔍 FILTER LOGIC DEBUG:');
+    console.log('Current filters:', { solvedFilter, activeFilter, difficultyFilter, searchTerm });
+    console.log(`Total questions: ${questions.length}`);
+    console.log(`Progress records: ${Object.keys(userProgress).length}`);
+    
+    const solvedCount = questions.filter(q => userProgress[String(q.id)]?.is_solved).length;
+    const unsolvedCount = questions.length - solvedCount;
+    
+    console.log(`Questions solved: ${solvedCount}`);
+    console.log(`Questions unsolved: ${unsolvedCount}`);
+    
+    if (solvedFilter !== 'all') {
+      const filteredBySolved = questions.filter(q => {
+        const isSolved = userProgress[String(q.id)]?.is_solved || false;
+        return solvedFilter === 'solved' ? isSolved : !isSolved;
+      });
+      console.log(`Questions matching solvedFilter='${solvedFilter}': ${filteredBySolved.length}`);
+    }
+    
+    console.log('Sample progress records:', Object.entries(userProgress).slice(0, 3));
+  }, [questions, userProgress, solvedFilter, activeFilter, difficultyFilter, searchTerm]);
+  
   // Note: Manual toggle removed - progress is now tracked via API sync only
   // Use the "Sync All" button to update progress from LeetCode/GFG APIs
 
@@ -176,12 +213,21 @@ const UserHomePage = () => {
         headers: { Authorization: `Bearer ${accessToken}` }
       });
 
-      // Refresh user progress
+      // Refresh user progress with enhanced timing
       console.log('🔄 Refreshing user progress after sync...');
       await fetchUserProgress();
       
-      // Force a small delay to ensure state is updated
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Force a longer delay to ensure React state updates are processed
+      console.log('⏳ Waiting for state updates to propagate...');
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Force a re-render by triggering a state change
+      setLoading(false);
+      setLoading(true);
+      await new Promise(resolve => setTimeout(resolve, 100));
+      setLoading(false);
+      
+      console.log('✅ State updates should be complete now');
       
       const results = response.data.results;
       let message = 'Progress synchronized for all platforms!\n\n';
@@ -239,7 +285,15 @@ const UserHomePage = () => {
 
   // Filter and sort questions based on search and filters
   useEffect(() => {
-    let filtered = questions.filter(question => {
+    console.log("🔍 FILTERING EFFECT - Starting filter with:");
+    console.log(`   - ${questions.length} total questions`);
+    console.log(`   - ${Object.keys(userProgress).length} progress records`);
+    console.log(`   - solvedFilter: ${solvedFilter}`);
+    console.log(`   - searchTerm: '${searchTerm}'`);
+    console.log(`   - activeFilter: ${activeFilter}`);
+    console.log(`   - difficultyFilter: ${difficultyFilter}`);
+    
+    let filtered = questions.filter((question, index) => {
       const matchesSearch = question.question_name.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesType = activeFilter === 'all' || question.type === activeFilter;
       const matchesDifficulty = difficultyFilter === 'all' || question.difficulty === difficultyFilter;
@@ -249,6 +303,14 @@ const UserHomePage = () => {
       const matchesSolved = solvedFilter === 'all' ||
         (solvedFilter === 'solved' && isSolved) ||
         (solvedFilter === 'unsolved' && !isSolved);
+
+      // Debug specific questions
+      if (index < 3) {
+        console.log(`   📄 Question "${question.question_name}" (ID: ${question.id}):`);
+        console.log(`     - isSolved: ${isSolved} (from userProgress[${String(question.id)}])`);
+        console.log(`     - matchesSolved (${solvedFilter}): ${matchesSolved}`);
+        console.log(`     - overall match: ${matchesSearch && matchesType && matchesDifficulty && matchesSolved}`);
+      }
 
       return matchesSearch && matchesType && matchesDifficulty && matchesSolved;
     });
@@ -268,8 +330,28 @@ const UserHomePage = () => {
       return 0;
     });
 
+    console.log(`🎯 FILTERING RESULT: ${filtered.length} questions after filtering`);
+    console.log(`   🔢 First few filtered questions:`, filtered.slice(0, 3).map(q => ({ 
+      name: q.question_name, 
+      id: q.id, 
+      isSolved: userProgress[String(q.id)]?.is_solved || false 
+    })));
+    
     setFilteredQuestions(filtered);
   }, [questions, searchTerm, activeFilter, difficultyFilter, solvedFilter, dateFilter, sortFilter, userProgress, getDateFilteredQuestions]);
+
+  // Track userProgress state changes for debugging
+  useEffect(() => {
+    console.log('🔄 USER PROGRESS STATE CHANGED in UserHomePage:');
+    console.log(`   - Progress records count: ${Object.keys(userProgress).length}`);
+    console.log(`   - Solved questions count: ${Object.values(userProgress).filter(p => p?.is_solved).length}`);
+    console.log(`   - Sample progress records:`, Object.entries(userProgress).slice(0, 3));
+    
+    // Trigger debug function when userProgress changes
+    if (Object.keys(userProgress).length > 0) {
+      setTimeout(() => debugFilterLogic(), 50);
+    }
+  }, [userProgress, debugFilterLogic]);
 
   // Load questions and progress on component mount
   useEffect(() => {
@@ -558,20 +640,36 @@ const UserHomePage = () => {
           ) : (
             <div className="flex flex-col space-y-4">
               {paginate(filteredQuestions).map((question) => {
+                const progressRecord = userProgress[String(question.id)];
+                const isSolvedValue = progressRecord?.is_solved || false;
+                
                 console.log(
-                  "Rendering question:",
-                  question.question_name,
-                  "id:", question.id,
-                  "type:", typeof question.id,
-                  "Progress for id:",
-                  userProgress[String(question.id)]
+                  `🎯 RENDERING QuestionCard for "${question.question_name}":`
+                );
+                console.log(
+                  `   - question.id: ${question.id} (type: ${typeof question.id})`
+                );
+                console.log(
+                  `   - String(question.id): "${String(question.id)}"`
+                );
+                console.log(
+                  `   - progressRecord:`, progressRecord
+                );
+                console.log(
+                  `   - progressRecord?.is_solved: ${progressRecord?.is_solved}`
+                );
+                console.log(
+                  `   - final isSolved prop: ${isSolvedValue}`
+                );
+                console.log(
+                  `   - userProgress keys:`, Object.keys(userProgress).slice(0, 5)
                 );
 
                 return (
                   <QuestionCard
                     key={question.id}
                     question={question}
-                    isSolved={userProgress[String(question.id)]?.is_solved || false}
+                    isSolved={isSolvedValue}
                     isBookmarked={bookmarkedQuestions[question.id] || false}
                     onToggleBookmark={() => toggleBookmark(question.id)}
                   />

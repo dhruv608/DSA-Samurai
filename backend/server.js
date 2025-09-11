@@ -495,6 +495,7 @@ app.post('/api/auth/logout', async (req, res) => {
 // *******************************************************************
 
 // Get user progress for a specific user
+
 app.get('/api/progress/:userId', async (req, res) => {
     const { userId } = req.params;
 
@@ -1391,9 +1392,10 @@ app.get('/api/users/:userId/bookmarks', verifyToken, async (req, res) => {
         if (error) {
             console.error('Error fetching bookmarks:', error.message);
             
-            // If table doesn't exist, return empty bookmarks
-            if (error.message.includes('relation "user_bookmarks" does not exist')) {
-                console.log('⚠️ user_bookmarks table does not exist, returning empty bookmarks');
+            // If table doesn't exist, return empty bookmarks (frontend uses localStorage)
+            if (error.message.includes('relation "user_bookmarks" does not exist') || 
+                error.message.includes('relation "public.user_bookmarks" does not exist')) {
+                console.log('⚠️ user_bookmarks table does not exist, returning empty bookmarks (frontend will use localStorage)');
                 return res.json({});
             }
             
@@ -1402,14 +1404,18 @@ app.get('/api/users/:userId/bookmarks', verifyToken, async (req, res) => {
         
         // Convert array to object for easier lookup
         const bookmarkMap = {};
-        data.forEach(bookmark => {
-            bookmarkMap[bookmark.question_id] = true;
-        });
+        if (data) {
+            data.forEach(bookmark => {
+                bookmarkMap[bookmark.question_id] = true;
+            });
+        }
         
         res.json(bookmarkMap);
     } catch (err) {
         console.error('Error fetching bookmarks:', err.message);
-        res.status(500).json({ error: 'Failed to fetch bookmarks' });
+        // Return empty bookmarks instead of error to allow frontend localStorage to work
+        console.log('📱 Returning empty bookmarks - frontend will use localStorage');
+        res.json({});
     }
 });
 
@@ -1500,7 +1506,7 @@ app.get('/api/users/:id', async (req, res) => {
 });
 
 // Update user profile
-app.put('/api/users/:id', async (req, res) => {
+app.put('/api/users/:id', verifyToken, async (req, res) => {
     const { id } = req.params;
     const { fullName, leetcodeUsername, geeksforgeeksUsername } = req.body;
 
@@ -1528,6 +1534,65 @@ app.put('/api/users/:id', async (req, res) => {
     } catch (err) {
         console.error('Error updating user profile:', err.message);
         res.status(500).json({ error: 'Failed to update user profile' });
+    }
+});
+
+// Delete user endpoint
+app.delete('/api/users/:id', verifyToken, async (req, res) => {
+    const { id } = req.params;
+
+    try {
+        // First, delete related data to avoid foreign key constraints
+        // Delete user progress
+        await supabase
+            .from('user_progress')
+            .delete()
+            .eq('user_id', id);
+        
+        // Delete user tokens
+        await supabase
+            .from('user_tokens')
+            .delete()
+            .eq('user_id', id);
+        
+        // Delete user bookmarks (if table exists)
+        try {
+            await supabase
+                .from('user_bookmarks')
+                .delete()
+                .eq('user_id', id);
+        } catch (bookmarkError) {
+            // Ignore if user_bookmarks table doesn't exist
+            console.log('User bookmarks cleanup skipped (table may not exist)');
+        }
+        
+        // Finally, delete the user
+        const { data, error } = await supabase
+            .from('users')
+            .delete()
+            .eq('id', id)
+            .select();
+        
+        if (error) {
+            console.error('Error deleting user:', error.message);
+            return res.status(500).json({ error: 'Failed to delete user' });
+        }
+        
+        if (data.length === 0) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        res.json({ 
+            success: true, 
+            message: 'User deleted successfully',
+            deleted_user: {
+                id: data[0].id,
+                username: data[0].username
+            }
+        });
+    } catch (err) {
+        console.error('Error deleting user:', err.message);
+        res.status(500).json({ error: 'Failed to delete user' });
     }
 });
 

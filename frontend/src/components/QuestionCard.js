@@ -19,14 +19,12 @@ const QuestionCard = ({ question, isSolved, isBookmarked, onToggleBookmark }) =>
   const { user } = useContext(AuthContext);
   const platform = identifyPlatform(question.question_link);
   
-  // Debug logging
-  console.log(`🎯 QuestionCard for "${question.question_name}" - isSolved: ${isSolved}, platform: ${platform}`);
 
   return (
     <div 
       className={`w-full h-24 p-4 mb-4 flex items-center justify-between rounded-lg shadow-lg transition-all duration-300 border-2 ${
         isSolved 
-          ? 'bg-green-100 dark:bg-green-800 border-green-600 dark:border-green-400' 
+          ? 'bg-green-50 dark:bg-green-900/20 border-green-400 dark:border-green-500' 
           : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600'
       } hover:shadow-xl hover:transform hover:scale-[1.02]`}
     >
@@ -83,21 +81,19 @@ const QuestionCard = ({ question, isSolved, isBookmarked, onToggleBookmark }) =>
         
         {/* API-based solved status indicator */}
         {user && (
-          <div className={`px-4 py-2 text-sm rounded flex items-center ${
+          <div className={`px-4 py-2 text-sm rounded flex items-center font-semibold transition-colors duration-200 ${
             isSolved 
-              ? 'bg-green-100 text-green-800 border border-green-300'
-              : 'bg-gray-100 text-gray-600 border border-gray-300'
+              ? 'bg-green-500 hover:bg-green-600 text-white shadow-md'
+              : 'bg-gray-100 text-gray-600 border border-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600'
           }`}>
             {isSolved ? (
               <>
-                <CheckIconSolid className="inline-block w-4 h-4 mr-1 text-green-600" />
-                <span className="font-medium">Solved</span>
-                {platform === 'gfg' && <span className="ml-1 text-xs">(GFG API)</span>}
-                {platform === 'leetcode' && <span className="ml-1 text-xs">(LC API)</span>}
+                <CheckIconSolid className="inline-block w-4 h-4 mr-1" />
+                <span>Solved</span>
               </>
             ) : (
               <>
-                <span className="text-gray-500 font-medium">Not Solved</span>
+                <span>Not Solved</span>
               </>
             )}
           </div>

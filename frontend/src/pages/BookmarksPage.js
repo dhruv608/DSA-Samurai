@@ -6,7 +6,7 @@ import { AuthContext } from '../context/AuthContext';
 import { API_BASE_URL, API_ENDPOINTS } from '../config/config';
 
 const BookmarksPage = () => {
-  const { user, accessToken } = useContext(AuthContext);
+  const { user, accessToken, isInitialized } = useContext(AuthContext);
   const [questions, setQuestions] = useState([]);
   const [bookmarkedQuestions, setBookmarkedQuestions] = useState({});
   const [userProgress, setUserProgress] = useState({});
@@ -29,9 +29,7 @@ const BookmarksPage = () => {
     if (!user || !accessToken) return;
     
     try {
-      const response = await axios.get(API_ENDPOINTS.QUESTIONS, {
-        headers: { Authorization: `Bearer ${accessToken}` }
-      });
+      const response = await axios.get(API_ENDPOINTS.QUESTIONS);
       setQuestions(response.data);
       
     } catch (error) {
@@ -46,9 +44,7 @@ const BookmarksPage = () => {
     if (!user || !accessToken) return;
     
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/users/${user.id}/progress`, {
-        headers: { Authorization: `Bearer ${accessToken}` }
-      });
+      const response = await axios.get(`${API_BASE_URL}/api/users/${user.id}/progress`);
       const progressMap = {};
       response.data.forEach(progress => {
         // Map by question_id which is the actual foreign key to questions table
@@ -94,17 +90,19 @@ const BookmarksPage = () => {
 
   useEffect(() => {
     const fetchAllData = async () => {
-      if (user && accessToken) {
+      if (isInitialized && user && accessToken) {
         // Initialize bookmarks from localStorage
         const storedBookmarks = getBookmarkedQuestions();
         setBookmarkedQuestions(storedBookmarks);
         
         await fetchQuestions();
         await fetchUserProgress();
+      } else if (isInitialized) {
+        setLoading(false);
       }
     };
     fetchAllData();
-  }, [user, accessToken, getBookmarkedQuestions]);
+  }, [user, accessToken, isInitialized, getBookmarkedQuestions]);
 
   // Filter only bookmarked questions
   const bookmarkedQuestionsList = questions.filter(question => 

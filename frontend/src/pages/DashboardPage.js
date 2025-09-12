@@ -2,6 +2,7 @@ import React, { useState, useEffect, useContext, useCallback } from 'react';
 import axios from 'axios';
 import { AuthContext } from '../context/AuthContext';
 import { API_BASE_URL } from '../config/config';
+// Removed optimization imports
 import {
   Chart as ChartJS,
   ArcElement,
@@ -33,12 +34,13 @@ ChartJS.register(
 );
 
 const DashboardPage = () => {
-  const { user, accessToken } = useContext(AuthContext);
+  const { user, accessToken, isInitialized } = useContext(AuthContext);
   const [questions, setQuestions] = useState([]);
   const [userProgress, setUserProgress] = useState({});
   const [userRank, setUserRank] = useState(null);
   const [totalUsers, setTotalUsers] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [rankLoading, setRankLoading] = useState(false);
   const [error, setError] = useState(null);
 
   // Function to fetch user rank from leaderboard
@@ -49,9 +51,12 @@ const DashboardPage = () => {
     }
     
     try {
+      setRankLoading(true);
       console.log('🏆 Fetching user rank for user ID:', user.id);
-      const leaderboardResponse = await axios.get(`${API_BASE_URL}/api/leaderboard?period=all-time`);
-      const leaderboard = leaderboardResponse.data;
+      
+      // Fetch leaderboard data
+      const response = await axios.get(`${API_BASE_URL}/api/leaderboard?period=all-time`);
+      const leaderboard = response.data;
       
       console.log('🏆 Leaderboard response:', leaderboard.length, 'users');
       
@@ -71,6 +76,8 @@ const DashboardPage = () => {
       console.error('Error fetching user rank:', error);
       setUserRank(null);
       setTotalUsers(0);
+    } finally {
+      setRankLoading(false);
     }
   }, [user?.id]);
 
@@ -80,41 +87,27 @@ const DashboardPage = () => {
       try {
         setLoading(true);
         setError(null); // Clear any previous errors
-        const [questionsResponse, progressResponse] = await Promise.all([
+        // Fetch questions and user progress
+        const [questionsResponse, userProgressResponse] = await Promise.all([
           axios.get(`${API_BASE_URL}/questions`),
-          axios.get(`${API_BASE_URL}/api/users/${user.id}/progress`, {
-            headers: { Authorization: `Bearer ${accessToken}` }
-          })
+          axios.get(`${API_BASE_URL}/api/users/${user.id}/progress`)
         ]);
         
-        console.log('📊 Dashboard - Questions data:', questionsResponse.data.length, 'questions');
-        console.log('📊 Dashboard - Progress data:', progressResponse.data.length, 'progress records');
+        const questions = questionsResponse.data;
+        const userProgressData = userProgressResponse.data;
         
-        setQuestions(questionsResponse.data);
+        console.log('📊 Dashboard - Loaded:', questions.length, 'questions,', userProgressData.length, 'progress records');
+        
+        setQuestions(questions);
         
         // Convert progress array to object for easier lookup
         const progressMap = {};
-        const solvedQuestionIds = [];
-        progressResponse.data.forEach(p => {
+        userProgressData.forEach(p => {
           progressMap[String(p.question_id)] = p.is_solved;
-          if (p.is_solved) {
-            console.log('✅ Dashboard - Question', p.question_id, 'is solved');
-            solvedQuestionIds.push(p.question_id);
-          }
         });
         
-        console.log('📈 Dashboard - Progress map keys:', Object.keys(progressMap).length);
-        console.log('📈 Dashboard - Progress map sample:', Object.entries(progressMap).slice(0, 5));
-        console.log('🎯 Dashboard - Solved question IDs:', solvedQuestionIds);
-        console.log('🎯 Dashboard - Solved count:', Object.values(progressMap).filter(Boolean).length);
-        
-        // Debug: Check if questions match progress records
-        const questionIds = questionsResponse.data.map(q => String(q.id));
-        const progressKeys = Object.keys(progressMap);
-        const matchingIds = questionIds.filter(id => progressKeys.includes(id));
-        console.log('🔄 Dashboard - Question IDs sample:', questionIds.slice(0, 5));
-        console.log('🔄 Dashboard - Progress keys sample:', progressKeys.slice(0, 5));
-        console.log('🔄 Dashboard - Matching IDs count:', matchingIds.length);
+        console.log('📈 Dashboard - Progress map:', Object.keys(progressMap).length, 'entries');
+        console.log('🎯 Dashboard - Solved count:', Object.values(progressMap).filter(Boolean).length, 'questions');
         
         setUserProgress(progressMap);
         
@@ -131,20 +124,20 @@ const DashboardPage = () => {
       }
     };
 
-    if (user?.id && accessToken) {
-      fetchData();
-    } else if (!user?.id || !accessToken) {
-      setLoading(false);
+    if (isInitialized) {
+      if (user?.id && accessToken) {
+        fetchData();
+      } else {
+        setLoading(false);
+      }
     }
-  }, [user?.id, accessToken]);
+  }, [user?.id, accessToken, isInitialized]);
 
-  // Track userProgress state changes for debugging
+  // Track userProgress state changes for debugging (simplified)
   useEffect(() => {
-    console.log('🔄 USER PROGRESS STATE CHANGED in Dashboard:');
-    console.log(`   - Progress records count: ${Object.keys(userProgress).length}`);
-    console.log(`   - Solved questions count (Boolean filter): ${Object.values(userProgress).filter(Boolean).length}`);
-    console.log(`   - Sample progress values:`, Object.values(userProgress).slice(0, 5));
-    console.log(`   - Sample progress entries:`, Object.entries(userProgress).slice(0, 3));
+    if (Object.keys(userProgress).length > 0) {
+      console.log('📊 Dashboard progress updated:', Object.values(userProgress).filter(Boolean).length, 'solved questions');
+    }
   }, [userProgress]);
 
   // Function to refresh data manually
@@ -153,29 +146,28 @@ const DashboardPage = () => {
     
     try {
       setLoading(true);
-      const [questionsResponse, progressResponse] = await Promise.all([
+      
+      // Fetch fresh data
+      const [questionsResponse, userProgressResponse] = await Promise.all([
         axios.get(`${API_BASE_URL}/questions`),
-        axios.get(`${API_BASE_URL}/api/users/${user.id}/progress`, {
-          headers: { Authorization: `Bearer ${accessToken}` }
-        })
+        axios.get(`${API_BASE_URL}/api/users/${user.id}/progress`)
       ]);
       
-      console.log('🔄 Dashboard Refresh - Questions data:', questionsResponse.data.length, 'questions');
-      console.log('🔄 Dashboard Refresh - Progress data:', progressResponse.data.length, 'progress records');
+      const questions = questionsResponse.data;
+      const userProgressData = userProgressResponse.data;
       
-      setQuestions(questionsResponse.data);
+      console.log('🔄 Dashboard Refresh - Questions data:', questions.length, 'questions');
+      console.log('🔄 Dashboard Refresh - Progress data:', userProgressData.length, 'progress records');
+      
+      setQuestions(questions);
       
       // Convert progress array to object for easier lookup
       const progressMap = {};
-      progressResponse.data.forEach(p => {
+      userProgressData.forEach(p => {
         progressMap[String(p.question_id)] = p.is_solved;
-        if (p.is_solved) {
-          console.log('✅ Dashboard Refresh - Question', p.question_id, 'is solved');
-        }
       });
       
-      console.log('📈 Dashboard Refresh - Progress map:', progressMap);
-      console.log('🎯 Dashboard Refresh - Solved count:', Object.values(progressMap).filter(Boolean).length);
+      console.log('🔄 Dashboard Refresh - Progress updated:', Object.values(progressMap).filter(Boolean).length, 'solved questions');
       
       setUserProgress(progressMap);
       
@@ -229,7 +221,7 @@ const DashboardPage = () => {
 
   const stats = getStats();
 
-  // Enhanced pie chart data with beautiful gradients
+  // Enhanced pie chart data with original green/amber theme
   const pieChartData = {
     labels: ['Solved', 'Pending'],
     datasets: [
@@ -259,7 +251,7 @@ const DashboardPage = () => {
     ],
   };
 
-  // Enhanced bar chart data with modern gradient colors
+  // Enhanced bar chart data with orange/teal theme
   const difficultyChartData = {
     labels: ['Easy', 'Medium', 'Hard'],
     datasets: [
@@ -267,28 +259,28 @@ const DashboardPage = () => {
         label: 'Solved Questions',
         data: [stats.solvedByDifficulty.easy, stats.solvedByDifficulty.medium, stats.solvedByDifficulty.hard],
         backgroundColor: [
-          'rgba(34, 197, 94, 0.9)', // Vibrant green for easy
-          'rgba(251, 191, 36, 0.9)', // Golden yellow for medium
-          'rgba(239, 68, 68, 0.9)', // Vibrant red for hard
+          'rgba(20, 184, 166, 0.9)', // Teal for easy
+          'rgba(251, 146, 60, 0.9)', // Orange for medium
+          'rgba(248, 113, 113, 0.9)', // Coral red for hard
         ],
         borderColor: [
-          'rgba(34, 197, 94, 1)',
-          'rgba(251, 191, 36, 1)',
-          'rgba(239, 68, 68, 1)',
+          'rgba(20, 184, 166, 1)',
+          'rgba(251, 146, 60, 1)',
+          'rgba(248, 113, 113, 1)',
         ],
         borderWidth: 3,
         borderRadius: 12,
         borderSkipped: false,
         hoverBackgroundColor: [
-          'rgba(34, 197, 94, 1)',
-          'rgba(251, 191, 36, 1)',
-          'rgba(239, 68, 68, 1)',
+          'rgba(20, 184, 166, 1)',
+          'rgba(251, 146, 60, 1)',
+          'rgba(248, 113, 113, 1)',
         ],
         hoverBorderWidth: 4,
         hoverBorderColor: [
-          'rgba(34, 197, 94, 1)',
-          'rgba(251, 191, 36, 1)',
-          'rgba(239, 68, 68, 1)',
+          'rgba(20, 184, 166, 1)',
+          'rgba(251, 146, 60, 1)',
+          'rgba(248, 113, 113, 1)',
         ],
       },
     ],
@@ -481,9 +473,7 @@ const DashboardPage = () => {
                       setError(null);
                       const [questionsResponse, progressResponse] = await Promise.all([
                         axios.get(`${API_BASE_URL}/questions`),
-                        axios.get(`${API_BASE_URL}/api/users/${user.id}/progress`, {
-                          headers: { Authorization: `Bearer ${accessToken}` }
-                        })
+                        axios.get(`${API_BASE_URL}/api/users/${user.id}/progress`)
                       ]);
                       
                       setQuestions(questionsResponse.data);
@@ -519,66 +509,7 @@ const DashboardPage = () => {
     return (
       <div className="dashboard-page">
         <div className="dashboard-container">
-          {/* Loading State with Skeleton Cards */}
-          <div className="hero-stats-section">
-            <div className="hero-stats-grid">
-              {[1, 2, 3, 4, 5].map(i => (
-                <div key={i} className="hero-stat-card animate-pulse">
-                  <div className="hero-stat-icon bg-gray-200 dark:bg-gray-700"></div>
-                  <div className="hero-stat-content">
-                    <div className="hero-stat-number bg-gray-200 dark:bg-gray-700 h-8 w-16 rounded mb-2"></div>
-                    <div className="hero-stat-label bg-gray-200 dark:bg-gray-700 h-4 w-12 rounded mb-1"></div>
-                    <div className="hero-stat-subtitle bg-gray-200 dark:bg-gray-700 h-3 w-20 rounded"></div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-          
-          {/* Loading Progress Section */}
-          <div className="progress-overview-section">
-            <div className="progress-overview-card animate-pulse">
-              <div className="progress-overview-header">
-                <div className="bg-gray-200 dark:bg-gray-700 h-6 w-32 rounded"></div>
-                <div className="bg-gray-200 dark:bg-gray-700 h-8 w-20 rounded"></div>
-              </div>
-              <div className="bg-gray-200 dark:bg-gray-700 h-4 w-full rounded-full"></div>
-            </div>
-          </div>
-          
-          {/* Loading Analytics Section */}
-          <div className="analytics-section">
-            <div className="analytics-header animate-pulse">
-              <div className="bg-gray-200 dark:bg-gray-700 h-8 w-48 rounded mb-2"></div>
-              <div className="bg-gray-200 dark:bg-gray-700 h-4 w-64 rounded"></div>
-            </div>
-            
-            <div className="analytics-grid">
-              {[1, 2].map(i => (
-                <div key={i} className="analytics-card animate-pulse">
-                  <div className="analytics-card-header">
-                    <div className="bg-gray-200 dark:bg-gray-700 h-6 w-32 rounded mb-2"></div>
-                    <div className="bg-gray-200 dark:bg-gray-700 h-4 w-48 rounded"></div>
-                  </div>
-                  <div className="analytics-chart">
-                    <div className="bg-gray-200 dark:bg-gray-700 h-64 w-full rounded"></div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-          
-          {/* Loading Message */}
-          <div className="fixed bottom-8 right-8 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 border">
-            <div className="flex items-center space-x-3">
-              <div className="flex space-x-1">
-                <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"></div>
-                <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
-                <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
-              </div>
-              <span className="text-gray-700 dark:text-gray-300 font-medium">Loading dashboard...</span>
-            </div>
-          </div>
+          <div className="loading-message">Loading dashboard...</div>
         </div>
       </div>
     );
@@ -629,11 +560,23 @@ const DashboardPage = () => {
               </div>
               <div className="hero-stat-content">
                 <div className="hero-stat-number">
-                  {userRank ? `#${userRank}` : '--'}
+                  {rankLoading ? (
+                    <div className="flex items-center space-x-1">
+                      <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"></div>
+                      <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
+                      <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+                    </div>
+                  ) : (
+                    userRank ? `#${userRank}` : '--'
+                  )}
                 </div>
                 <div className="hero-stat-label">Rank</div>
                 <div className="hero-stat-subtitle">
-                  {userRank ? `Out of ${totalUsers} users` : 'Not ranked yet'}
+                  {rankLoading ? (
+                    'Calculating rank...'
+                  ) : (
+                    userRank ? `Out of ${totalUsers} users` : 'Not ranked yet'
+                  )}
                 </div>
               </div>
             </div>

@@ -23,59 +23,7 @@ const LeaderboardPage = () => {
   const [lastUpdated, setLastUpdated] = useState(null);
 
   // Enhanced static demo data with more details
-// Enhanced helper function to fetch GFG user photo with better error handling and caching
-const fetchGFGUserPhoto = async (username) => {
-  if (!username) return null;
-  
-  try {
-    console.log(`🔍 Fetching GFG photo for: ${username}`);
-    
-    // Add timeout to prevent hanging requests
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
-    
-    const response = await fetch(`https://geeks-for-geeks-api.vercel.app/${username}`, {
-      signal: controller.signal,
-      headers: {
-        'Accept': 'application/json',
-        'User-Agent': 'DSA-Project/1.0'
-      }
-    });
-    
-    clearTimeout(timeoutId);
-    
-    if (response.ok) {
-      const data = await response.json();
-      console.log(`📸 GFG API response for ${username}:`, data);
-      
-      if (data.error) {
-        console.warn(`❌ GFG API error for ${username}:`, data.error);
-        return null;
-      }
-      
-      const profilePicture = data.info?.profilePicture;
-      const defaultAvatar = 'https://media.geeksforgeeks.org/img-practice/user_web-1598433228.svg';
-      
-      if (profilePicture && profilePicture !== defaultAvatar && profilePicture.startsWith('http')) {
-        console.log(`✅ Found profile picture for ${username}:`, profilePicture);
-        return profilePicture;
-      } else {
-        console.log(`📷 Using default avatar for ${username} (no custom profile picture)`);
-        return null;
-      }
-    } else {
-      console.warn(`❌ GFG API HTTP error for ${username}: ${response.status} ${response.statusText}`);
-      return null;
-    }
-  } catch (error) {
-    if (error.name === 'AbortError') {
-      console.warn(`⏰ Timeout fetching GFG photo for ${username}`);
-    } else {
-      console.warn(`❌ Failed to fetch GFG photo for ${username}:`, error.message);
-    }
-    return null;
-  }
-};
+// Removed GFG photo fetching for performance
 
 // Fetch leaderboard data from backend API
 const fetchLeaderboardData = async (filter) => {
@@ -102,54 +50,15 @@ const fetchLeaderboardData = async (filter) => {
     // Limit to top 10 users
     const top10Data = data.slice(0, 10);
     
-    // Fetch user profiles and photos from GFG API
-    const enrichedData = await Promise.all(
-      top10Data.map(async (user) => {
-        try {
-          // First try to get user profile from backend
-          const userResponse = await fetch(`${API_BASE_URL}/api/users/${user.id}`);
-          let profilePhoto = null;
-          let gfgUsername = null;
-          
-          if (userResponse.ok) {
-            const userProfile = await userResponse.json();
-            profilePhoto = userProfile.profile_photo;
-            gfgUsername = userProfile.geeksforgeeks_username;
-            
-            console.log(`👤 User ${user.username} profile:`, {
-              id: user.id,
-              gfgUsername,
-              hasProfilePhoto: !!profilePhoto
-            });
-            
-            // If no photo in profile, try to fetch from GFG API
-            if (!profilePhoto && gfgUsername) {
-              console.log(`🔄 Fetching GFG photo for user ${user.username} with GFG username: ${gfgUsername}`);
-              profilePhoto = await fetchGFGUserPhoto(gfgUsername);
-            }
-          }
-          
-          return {
-            ...user,
-            photo: profilePhoto,
-            streak: Math.floor(Math.random() * 30) + 1, // Mock streak for now
-            easy: Math.floor(user.solved_count * 0.4),
-            medium: Math.floor(user.solved_count * 0.4), 
-            hard: Math.floor(user.solved_count * 0.2)
-          };
-        } catch (error) {
-          console.warn(`Failed to fetch profile for user ${user.id}:`, error);
-          return {
-            ...user,
-            photo: null,
-            streak: Math.floor(Math.random() * 30) + 1,
-            easy: Math.floor(user.solved_count * 0.4),
-            medium: Math.floor(user.solved_count * 0.4), 
-            hard: Math.floor(user.solved_count * 0.2)
-          };
-        }
-      })
-    );
+    // Skip individual profile fetching for performance - just use basic user data
+    const enrichedData = top10Data.map((user) => ({
+      ...user,
+      photo: null, // No profile photos for now
+      streak: Math.floor(Math.random() * 30) + 1, // Mock streak for now
+      easy: Math.floor(user.solved_count * 0.4),
+      medium: Math.floor(user.solved_count * 0.4), 
+      hard: Math.floor(user.solved_count * 0.2)
+    }));
     
     return enrichedData;
   } catch (error) {
@@ -191,41 +100,10 @@ const data = await fetchLeaderboardData(filter);
   };
 
   const UserAvatar = ({ user, size = 'w-10 h-10', textSize = 'text-sm', showBorder = false }) => {
-    const [imageError, setImageError] = useState(false);
-    const [imageLoading, setImageLoading] = useState(true);
-    
-    const handleImageLoad = () => {
-      setImageLoading(false);
-    };
-    
-    const handleImageError = () => {
-      setImageError(true);
-      setImageLoading(false);
-    };
-    
-    if (imageError || !user.photo) {
-      return (
-        <div className={`${size} rounded-full bg-gradient-to-br from-purple-400 to-purple-600 flex items-center justify-center text-white font-semibold ${textSize} shadow-lg ${showBorder ? 'ring-2 ring-white ring-offset-2' : ''}`}>
-          {getAvatarInitials(user.full_name || user.username)}
-        </div>
-      );
-    }
-    
+    // Always show initials since we removed profile photos for performance
     return (
-      <div className={`${size} rounded-full overflow-hidden relative shadow-lg ${showBorder ? 'ring-2 ring-white ring-offset-2' : ''}`}>
-        {imageLoading && (
-          <div className="absolute inset-0 bg-gradient-to-br from-gray-200 to-gray-300 animate-pulse flex items-center justify-center">
-            <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
-          </div>
-        )}
-        <img 
-          src={user.photo} 
-          alt={`${user.full_name || user.username} profile`}
-          className={`w-full h-full object-cover transition-opacity duration-300 ${imageLoading ? 'opacity-0' : 'opacity-100'}`}
-          onLoad={handleImageLoad}
-          onError={handleImageError}
-          loading="lazy"
-        />
+      <div className={`${size} rounded-full bg-gradient-to-br from-purple-400 to-purple-600 flex items-center justify-center text-white font-semibold ${textSize} shadow-lg ${showBorder ? 'ring-2 ring-white ring-offset-2' : ''}`}>
+        {getAvatarInitials(user.full_name || user.username)}
       </div>
     );
   };
@@ -311,41 +189,7 @@ const data = await fetchLeaderboardData(filter);
               <span className="text-sm">Refresh click</span>
             </button>
             
-            <button
-              onClick={async () => {
-                try {
-                  setLoading(true);
-                  // Trigger backend sync to update all user photos
-                  const response = await fetch(`${API_BASE_URL}/api/sync-all-progress`, {
-                    method: 'POST',
-                    headers: {
-                      'Content-Type': 'application/json'
-                    }
-                  });
-                  
-                  if (response.ok) {
-                    // Refresh leaderboard data after sync
-                    const data = await fetchLeaderboardData(filter);
-                    setLeaderboardData(data);
-                    setLastUpdated(new Date());
-                    console.log('✅ GFG photos synced successfully');
-                  } else {
-                    console.warn('⚠️ Failed to sync GFG photos');
-                  }
-                } catch (error) {
-                  console.error('❌ Error syncing GFG photos:', error);
-                } finally {
-                  setLoading(false);
-                }
-              }}
-              className="flex items-center text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300 transition-colors"
-              title="Sync GFG profile photos"
-            >
-              <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-              <span className="text-sm">Sync Photos</span>
-            </button>
+            {/* Removed sync photos button for performance */}
           </div>
         </div>
 

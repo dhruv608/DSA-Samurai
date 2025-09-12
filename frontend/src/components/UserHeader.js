@@ -12,7 +12,7 @@ const UserHeader = () => {
       <div className="header-container">
         <div className="logo">
           <h1>DSA Samurai</h1>
-          <p className="logo-subtitle">Hello Coder {user?.fullName?.split(' ')[0]}!</p>
+          <p className="logo-subtitle">Hello Ninja {user?.fullName?.split(' ')[0]}!</p>
         </div>
         <nav className="navigation">
           <Link 

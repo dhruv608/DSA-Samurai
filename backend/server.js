@@ -1738,23 +1738,15 @@ app.post('/api/sync-all-users-progress', async (req, res) => {
     }
 });
 
-// Get leaderboard data using Supabase
+// Get leaderboard data using Supabase - OPTIMIZED with single query
 app.get('/api/leaderboard', async (req, res) => {
     const { period } = req.query; // daily, weekly, all-time
 
     try {
-        // Get all users with role 'user'
-        const { data: users, error: usersError } = await supabase
-            .from('users')
-            .select('id, username, full_name')
-            .eq('role', 'user');
+        console.log(`🏆 Fetching leaderboard for period: ${period}`);
+        const startTime = Date.now();
 
-        if (usersError) {
-            console.error('Error fetching users:', usersError.message);
-            return res.status(500).json({ error: 'Failed to fetch leaderboard' });
-        }
-
-        // Get total questions count
+        // Get total questions count (still need this for success rate)
         const { count: totalQuestions, error: questionsError } = await supabase
             .from('questions')
             .select('*', { count: 'exact', head: true });
@@ -1764,17 +1756,56 @@ app.get('/api/leaderboard', async (req, res) => {
             return res.status(500).json({ error: 'Failed to fetch leaderboard' });
         }
 
-        // Build leaderboard data
-        const leaderboard = [];
+        // Build the optimized query with proper time filtering
+        let query = `
+            SELECT 
+                u.id,
+                u.username,
+                u.full_name,
+                COUNT(up.id) as solved_count
+            FROM users u
+            LEFT JOIN user_progress up ON u.id = up.user_id AND up.is_solved = true
+        `;
 
-        for (const user of users) {
+        // Add time filtering to the JOIN condition
+        if (period === 'daily') {
+            const today = new Date().toISOString().slice(0, 10);
+            query += ` AND up.solved_at >= '${today}'`;
+        } else if (period === 'weekly') {
+            const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+            query += ` AND up.solved_at >= '${weekAgo}'`;
+        }
+
+        query += `
+            WHERE u.role = 'user'
+            GROUP BY u.id, u.username, u.full_name
+            ORDER BY solved_count DESC, u.username ASC
+            LIMIT 50
+        `;
+
+        console.log(`🔍 Executing optimized leaderboard query for ${period}`);
+
+        // Execute the optimized query
+        const { data: leaderboardData, error: leaderboardError } = await supabase.rpc('exec_sql', {
+            sql: query
+        });
+
+        // Fallback to manual query if RPC doesn't work
+        let leaderboard;
+        if (leaderboardError || !leaderboardData) {
+            console.log('📋 RPC failed, using fallback query method');
+            
+            // Fallback: Use Supabase query builder (still much faster than N+1)
             let progressQuery = supabase
                 .from('user_progress')
-                .select('*', { count: 'exact', head: true })
-                .eq('user_id', user.id)
-                .eq('is_solved', true);
+                .select(`
+                    user_id,
+                    users!inner(id, username, full_name, role)
+                `, { count: 'exact' })
+                .eq('is_solved', true)
+                .eq('users.role', 'user');
 
-            // Apply time filtering if specified
+            // Apply time filtering
             if (period === 'daily') {
                 const today = new Date().toISOString().slice(0, 10);
                 progressQuery = progressQuery.gte('solved_at', today);
@@ -1783,40 +1814,76 @@ app.get('/api/leaderboard', async (req, res) => {
                 progressQuery = progressQuery.gte('solved_at', weekAgo);
             }
 
-            const { count: solvedCount, error: progressError } = await progressQuery;
+            const { data: progressData, error: progressError } = await progressQuery;
 
             if (progressError) {
                 console.error('Error fetching user progress:', progressError.message);
-                continue; // Skip this user but continue with others
+                return res.status(500).json({ error: 'Failed to fetch leaderboard' });
             }
 
-            const successRate = totalQuestions > 0 ? 
-                Math.round((solvedCount / totalQuestions) * 100 * 100) / 100 : 0;
-
-            leaderboard.push({
-                id: user.id,
-                username: user.username,
-                full_name: user.full_name,
-                solved_count: solvedCount || 0,
-                success_rate: successRate
+            // Group by user and count solved questions
+            const userSolvedCounts = {};
+            progressData.forEach(record => {
+                const userId = record.user_id;
+                const user = record.users;
+                
+                if (!userSolvedCounts[userId]) {
+                    userSolvedCounts[userId] = {
+                        id: user.id,
+                        username: user.username,
+                        full_name: user.full_name,
+                        solved_count: 0
+                    };
+                }
+                userSolvedCounts[userId].solved_count++;
             });
+
+            // Also get users with zero solved questions for complete leaderboard
+            const { data: allUsers, error: allUsersError } = await supabase
+                .from('users')
+                .select('id, username, full_name')
+                .eq('role', 'user');
+
+            if (!allUsersError) {
+                allUsers.forEach(user => {
+                    if (!userSolvedCounts[user.id]) {
+                        userSolvedCounts[user.id] = {
+                            id: user.id,
+                            username: user.username,
+                            full_name: user.full_name,
+                            solved_count: 0
+                        };
+                    }
+                });
+            }
+
+            // Convert to array and sort
+            leaderboard = Object.values(userSolvedCounts)
+                .sort((a, b) => {
+                    if (b.solved_count !== a.solved_count) {
+                        return b.solved_count - a.solved_count;
+                    }
+                    return a.username.localeCompare(b.username);
+                })
+                .slice(0, 50);
+        } else {
+            leaderboard = leaderboardData;
         }
 
-        // Sort by solved_count descending, then by username ascending
-        leaderboard.sort((a, b) => {
-            if (b.solved_count !== a.solved_count) {
-                return b.solved_count - a.solved_count;
-            }
-            return a.username.localeCompare(b.username);
+        // Add rank and success rate
+        const rankedLeaderboard = leaderboard.map((user, index) => {
+            const successRate = totalQuestions > 0 ? 
+                Math.round((user.solved_count / totalQuestions) * 100 * 100) / 100 : 0;
+
+            return {
+                ...user,
+                rank: index + 1,
+                success_rate: successRate
+            };
         });
 
-        // Add rank and limit to 50
-        const rankedLeaderboard = leaderboard
-            .slice(0, 50)
-            .map((user, index) => ({
-                ...user,
-                rank: index + 1
-            }));
+        const endTime = Date.now();
+        console.log(`⚡ Leaderboard query completed in ${endTime - startTime}ms for ${rankedLeaderboard.length} users`);
 
         res.json(rankedLeaderboard);
     } catch (err) {
